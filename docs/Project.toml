@@ -1,0 +1,3 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Double32 = "0bebc928-4edf-449f-90c8-3d2087b1d99f"
