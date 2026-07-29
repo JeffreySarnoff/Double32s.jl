@@ -1535,13 +1535,12 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
   exp/log tables are dynamically indexed tuples, which compile on GPU but may
   spill to local memory (§20.6 records the trade)
 
-### Not committed
+### Git state
 
-**Nothing has ever been committed in this effort.** Working tree holds the
-whole package: modified `Project.toml`/`Manifest.toml`/CI/README/docs files,
-deleted `src/Double32.jl` stub, and untracked `src/`, `test/` (new files),
-`ext/`, `scripts/`, `docs/{Design,Reports,src/guide,src/reference}`,
-`docs/Checkpoint.md`. First commit is the obvious next action when asked.
+First commit landed 2026-07-29 00:57 EDT at user request: `e92076e`
+("Complete Double32 package: scalar core, elementary functions, GPU layer",
+76 files, 19,721 insertions — the entire package as of the elementary-function
+rebuild). Not pushed; no remote interaction has been requested.
 
 ---
 
