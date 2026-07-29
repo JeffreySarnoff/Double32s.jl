@@ -15,7 +15,7 @@ suite green at **2,508,781+ assertions, 0 failures** (`Pkg.test()`). See
 |---|---|---|
 | Package/module name | **`Double32s`** (`Project.toml` `name = "Double32s"`) | Verified: inside `module Double32`, `using Double32` imports the *module*, and the exported type is shadowed. Design section 1.3. |
 | Type name | `Double32`, the only exported name | |
-| Repository directory | stays `Double32.jl` | Design section 1.3 blesses this explicitly. |
+| Repository directory | was `Double32.jl`; renamed to `Double32s.jl` 2026-07-29 to match the package | Design section 1.3 blessed the mismatch; the rename retires it. |
 | UUID | unchanged (`0bebc928-…`) | Package was never registered. |
 | Dependencies | `Random` (stdlib) only | `KernelAbstractions`/`Adapt` are roadmap Phase 2; nothing in the scalar core needs them. |
 | `Base.convert` | **not** defined | Base routes `convert` to the constructors. Design section 6.4. |

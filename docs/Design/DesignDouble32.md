@@ -115,7 +115,7 @@ There are two viable designs:
 | `Double32` | `Float32x2` or `DF32` | `Double32.Float32x2` | Preserves the requested package name but not the intended type name |
 | `Double32s` | `Double32` | `Double32s.Double32` | Preserves the intended type name and is the recommended Julia API |
 
-**Recommendation:** register and implement the package as `Double32s.jl`, exporting `Double32`. The repository or design project may retain the working name “Double32.jl,” but the Julia project/module should be `Double32s` unless the public scalar is renamed to `Float32x2`.
+**Recommendation:** register and implement the package as `Double32s.jl`, exporting `Double32`. The repository or design project may retain the working name “Double32.jl,” but the Julia project/module should be `Double32s` unless the public scalar is renamed to `Float32x2`. *(Retired 2026-07-29: repository and directory are now `Double32s.jl` everywhere.)*
 
 The rest of this document uses the intended scalar name `Double32` and assumes the recommended root module `Double32s`.
 

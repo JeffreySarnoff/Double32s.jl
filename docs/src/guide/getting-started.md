@@ -11,7 +11,7 @@ end
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/JeffreySarnoff/Double32.jl")
+Pkg.add(url = "https://github.com/JeffreySarnoff/Double32s.jl")
 using Double32s
 ```
 
