@@ -59,9 +59,13 @@ of the two neighboring 48-bit model values.
 
 Three of these deserve their stories:
 
-**Addition is proven, not just measured.** The kernel is AccurateDWPlusDW
-(Joldeş–Muller–Popescu 2017), relative error ≤ `3u²/(1−4u)`, machine-checked
-in Coq by Muller & Rideau (2022), valid at this precision.
+**Addition is proven, not just measured.** The kernel is AccurateDWPlusDW:
+Joldeş, Muller & Popescu, *ACM TOMS* 44(2), Article 15res (2017),
+Algorithm 6 with the bound `3u²/(1−4u)` from Theorem 3.1 (both p. 15res:7,
+valid for `p ≥ 3`, so at this precision); machine-checked in Coq and proven
+asymptotically optimal by Muller & Rideau, *ACM TOMS* 48(1), Article 9
+(2022), §2.2 Property 2.1 — where the same algorithm is renumbered
+Algorithm 4. DOIs `10.1145/3121432`, `10.1145/3484514`.
 
 **Division is deliberately not faithful.** A second Newton correction is
 implemented and measured (2.30 ulp48 worst) — it *still* isn't faithful, and
@@ -114,7 +118,7 @@ the true result genuinely rounds to `Inf`:
 julia> x = Double32(2.0f0^64, -2.0f0^40);       # x*x overflows its leading term...
 
 julia> x * x                                     # ...but the true square is finite
-Double32(3.4028233f38, 1.2089258f24)
+3.402823263561204650859e+38
 ```
 
 ## Comparing against other types

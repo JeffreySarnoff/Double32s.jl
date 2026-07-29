@@ -54,7 +54,7 @@ Hyperbolic sine.
 # Examples
 ```jldoctest
 julia> sinh(zero(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> Float64(sinh(Double32(1.0f0)))
 1.175201193643801
@@ -110,7 +110,7 @@ where a subtraction would actually cancel.
 # Examples
 ```jldoctest
 julia> cosh(zero(Double32))
-Double32(1.0f0, 0.0f0)
+1.0
 
 julia> cosh(Double32(-2.0f0)) === cosh(Double32(2.0f0))
 true
@@ -170,10 +170,10 @@ Exactly odd: every branch evaluates on `|x|` and restores the sign.
 # Examples
 ```jldoctest
 julia> tanh(zero(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> tanh(Double32(100.0f0))
-Double32(1.0f0, 0.0f0)
+1.0
 
 julia> Float64(tanh(Double32(1.0f0)))
 0.7615941559557662
@@ -234,7 +234,7 @@ cancels for negative `x`, because `sqrt(x² + 1)` then very nearly equals `-x`.
 # Examples
 ```jldoctest
 julia> asinh(zero(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> asinh(-Double32(2.0f0)) === -asinh(Double32(2.0f0))
 true
@@ -286,7 +286,7 @@ Throws a `DomainError` below 1, matching `acosh(::Float32)`.
 # Examples
 ```jldoctest
 julia> acosh(one(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> Float64(acosh(Double32(2.0f0)))
 1.3169578969248192
@@ -326,10 +326,10 @@ Returns `±Inf` at `±1` and throws a `DomainError` outside `[-1, 1]`, matching
 # Examples
 ```jldoctest
 julia> atanh(zero(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> atanh(one(Double32))
-Double32(Inf32, 0.0f0)
+Inf
 ```
 """
 function Base.atanh(x::Double32)

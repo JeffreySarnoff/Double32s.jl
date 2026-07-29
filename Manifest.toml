@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "6fab0370884f852ee5b774919a568aa0665a0d4f"
+project_hash = "50de56b385a44ebd85ad284307d8e2e0148a47da"
 
 [[deps.AcceleratedKernels]]
 deps = ["ArgCheck", "GPUArraysCore", "KernelAbstractions", "Markdown", "UnsafeAtomics"]
@@ -72,18 +72,22 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 version = "1.11.0"
 
 [[deps.Double32s]]
-deps = ["AcceleratedKernels", "Adapt", "KernelAbstractions", "LinearAlgebra", "Random"]
+deps = ["AcceleratedKernels", "Adapt", "KernelAbstractions", "LinearAlgebra", "Printf", "Random"]
 path = "."
 uuid = "0bebc928-4edf-449f-90c8-3d2087b1d99f"
 version = "0.1.0"
 
     [deps.Double32s.extensions]
     Double32sAMDGPUExt = "AMDGPU"
+    Double32sBFloat16sExt = "BFloat16s"
     Double32sCUDAExt = "CUDA"
+    Double32sDoubleFloatsExt = "DoubleFloats"
 
     [deps.Double32s.weakdeps]
     AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+    BFloat16s = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
     CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+    DoubleFloats = "497a8b3b-efae-58df-a0af-a86822472b78"
 
 [[deps.GPUArraysCore]]
 deps = ["Adapt"]

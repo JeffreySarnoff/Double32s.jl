@@ -39,9 +39,10 @@ const KA = KernelAbstractions
         end
         @test sort(collect(keys(proj["deps"]))) ==
               ["AcceleratedKernels", "Adapt", "KernelAbstractions",
-               "LinearAlgebra", "Random"]
+               "LinearAlgebra", "Printf", "Random"]
         @test sort(collect(keys(proj["extensions"]))) ==
-              ["Double32sAMDGPUExt", "Double32sCUDAExt"]
+              ["Double32sAMDGPUExt", "Double32sBFloat16sExt",
+               "Double32sCUDAExt", "Double32sDoubleFloatsExt"]
     end
 
     @testset "probe lanes" begin

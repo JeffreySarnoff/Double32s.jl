@@ -1483,9 +1483,12 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
 
 ### Dependency shape
 
-- `[deps]`: AcceleratedKernels, Adapt, KernelAbstractions, **LinearAlgebra**, Random
+- `[deps]`: AcceleratedKernels, Adapt, KernelAbstractions, **LinearAlgebra**,
+  **Printf** (decimal `show`, host-only), Random
 - `[weakdeps]`: CUDA, AMDGPU → `Double32sCUDAExt`, `Double32sAMDGPUExt` (vendor
-  reporting only; all compute is in `src/`)
+  reporting only; all compute is in `src/`); BFloat16s, DoubleFloats →
+  `Double32sBFloat16sExt`, `Double32sDoubleFloatsExt` (promotion + conversion,
+  §11.3 rule 4; 2026-07-29)
 - KA is direct because AK has no GEMM; LinearAlgebra for the host `mul!`.
 
 ### Key numbers (RTX 5090, this machine)
@@ -1505,7 +1508,7 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
   `AB'` 1696 → 58.0; `A*x` 18.4 → 0.89; `dot` 10⁵ 712 → 141 µs. Error
   ≤ 2.1e-14 normwise, flat in n. n=32 ratios vs `Float64` BLAS:
   `A*x` 6.0×, `A'B` 8.2×, `AB'` 8.5×, `A*B` 11.0×, `dot(10⁴)` 20.7×
-- suite: **2,517,816 assertions**, ~51 s; docs build exit 0, doctests green
+- suite: **2,662,749 assertions**, ~52 s; docs build exit 0, doctests green
 
 ### Regeneration commands
 
@@ -1522,9 +1525,6 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
   `kernel_report(::ROCBackend)` intentionally a MethodError
 - Payne–Hanek trig reduction past `2^20` — policy is NaN, recorded in §20.4
 - `AllocCheck` / `JET` / `Aqua` not wired in; `test/gates.jl` carries stand-ins
-- JMP/Muller–Rideau citation lacks page numbers
-- `Double32sBFloat16sExt`, `Double32sDoubleFloatsExt` (§11.3 rule 4) unwritten
-- three-argument decimal `show` deferred (§11.5)
 - cross-backend bit-identical *reductions* withdrawn with the AK move (§19.6);
   `matmul` is the remaining cross-backend-reproducible routine
 - `lu` and `\` still run the generic fallbacks — the rank-1 update rewrites
@@ -1534,6 +1534,11 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
 - device throughput of the rebuilt elementary functions unmeasured: the
   exp/log tables are dynamically indexed tuples, which compile on GPU but may
   spill to local memory (§20.6 records the trade)
+
+Closed 2026-07-29 (entry below; details in `UseFableHere.md` Tier 4): the
+JMP/Muller–Rideau page references, both foreign-type extensions, and the
+three-argument decimal `show` + `parse`. Closing them also fixed
+`Float16(::Double32)` tie misrounding (round-to-odd rule, `to_odd_hi`).
 
 ### Git state
 
@@ -1753,4 +1758,86 @@ in the docstring and GPU guide now carry the remeasured values.
   generics; guides, examples, index updated; all three reports regenerated
   with the new names (`gpu_report.jl` also gained the `LinearAlgebra` import
   `dot` now needs).
+- Snapshot updated in place.
+
+---
+
+## Tier 4 closed: extensions, decimal show, citation pages — 2026-07-29
+
+The four "work that has not been done" items of `UseFableHere.md` Tier 4,
+worked under that document's rules. Full accounting there; deltas here.
+
+### Roadmap phases 3–5: the list was stale, not open
+
+Verified against `src/` and the Phase 3–5 entries above before touching
+anything: warp shuffle was implemented, measured 0.48–0.56×, rejected per
+§15.2; the deterministic fixed tree is the only reduction path; the tiled
+matmul shipped and was rebuilt split-channel. Nothing to do; the Tier 4
+entry, not the code, was behind.
+
+### Defect found and fixed: `Float16(::Double32)` misrounds low-word-broken ties
+
+`Float16(x) = Float16(x.hi)` double-rounds: wrong whenever `hi` sits exactly
+on a `Float16` tie and `lo` breaks it. Same family as Tier 0.1/2.1 — the high
+word alone is not the value. Fixed by a stated rule scoped to the operation
+class (every conversion narrower than `Float32`): `to_odd_hi(x)` rounds the
+high word **to odd** against the low word, then the narrow RNE rounding is
+exact for `p ≤ 22` (Boldo–Melquiond; Float16 p=11, BFloat16 p=8). Verified
+over 4,772 constructed tie operands per format — both §23.11 subclasses,
+negative mirrors, reference decided by `sign(lo)` independently of the
+implementation — and the suite asserts the retired rule is *still* wrong on
+≥ ¼ of the pool.
+
+### `Double32sBFloat16sExt`, `Double32sDoubleFloatsExt` (new, `ext/`)
+
+- BFloat16: `promote_rule → Double32`; widening exact (65,536-pattern
+  exhaustive round-trip); narrowing through `to_odd_hi` (BFloat16s 0.6.1's
+  `Float32 → BFloat16` verified RNE in its source first).
+- DoubleFloats: conversions both ways for `DoubleFloat{Float16,Float32,Float64}`.
+  `Double64 → Double32` runs a 2,200-bit `BigFloat` intermediate (a Double64
+  pair spans up to ~2,150 bits; default 256 would re-round — the narrowing
+  defect class again) with a signed-zero guard (`big(-0.0) + big(0.0) == +0.0`
+  — the Tier 0.2 `reference` leak at a new site). Correct rounding verified by
+  neighbor minimality at constructed pair-lattice ties (72 operands, 0
+  failures), tie parity checked where interior to the binade.
+  `ours → Double64` exact by construction, verified against `reference` over
+  the full pool. Promotion: their bounds never match `Double32` (checked by
+  probing, not reading); two rules added (`Double64` wins, `Double32` beats
+  `DoubleFloat{Float16}`); same-width `DoubleFloat{Float32}` gets conversions
+  but deliberately **no** rule. `detect_ambiguities` still 0.
+
+### §11.5 delivered: decimal `show(io, MIME"text/plain", x)` + `parse`/`tryparse`
+
+`Double32s.decimal(x)`: shortest `%.Ng` string that parses back `isequal` —
+checked by parsing before returning, per value, not promised by analysis.
+`tryparse` routes through a 384-bit `BigFloat` (pair span ≤ 277 bits).
+Wide-gap pairs genuinely print ~47–90 digits; `test/core/decimal.jl` asserts
+the 17-digit habit is visibly wrong on `canonicalize(1.0f0, 2f0^-149)`.
+Two-argument `show`/`repr` keep the pair form; both round-trip contracts hold.
+All jldoctests rewritten (`makedocs(doctest=:fix)` with `setdocmeta!` — first
+attempt without it stamped `UndefVarError` into 17 files and was healed by
+re-running correctly; diff every `fix=true` before trusting it).
+Getting-started prose updated for the decimal REPL display.
+
+### Citation pages (from the PDFs, read at the cited locations)
+
+JMP 2017: TOMS 44(2), Article 15res, DOI 10.1145/3121432 — Algorithm 6 and
+Theorem 3.1 (`3u²/(1−4u)`, p ≥ 3) both on p. 15res:7. Muller–Rideau 2022:
+TOMS 48(1), Article 9, DOI 10.1145/3484514 — §2.2 Property 2.1: Coq-confirmed
+**and asymptotically optimal**; renumbered Algorithm 4 there; ACM in-article
+page unverified (DL blocks fetching), stated as such. Framing corrected: the
+bound was never a post-hoc fix — it is the 2017 paper's own theorem; the wrong
+bound was Li et al.'s `2u²`. Applied at `add_dd_`, §8.1, `guide/accuracy.md`,
+and Tier 2.1.
+
+### State
+
+- `Pkg.test()` green: **2,662,749 assertions** (+144,933), 52.2 s — new
+  `test/foreign.jl` (142,520) and `test/core/decimal.jl` (2,414).
+- Docs build exit 0, doctests green after the display change.
+- `Project.toml`: + Printf (deps); + BFloat16s, DoubleFloats (weakdeps,
+  compat "0.5 - 0.6" / "1"); extras/targets extended.
+- New: `ext/Double32sBFloat16sExt.jl`, `ext/Double32sDoubleFloatsExt.jl`,
+  `test/foreign.jl`, `test/core/decimal.jl`, `Double32s.to_odd_hi`,
+  `Double32s.decimal`, `Base.parse`/`tryparse`, 3-arg `show`.
 - Snapshot updated in place.

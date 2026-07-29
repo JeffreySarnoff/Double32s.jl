@@ -118,7 +118,46 @@ is `(-0.0f0, +0.0f0)` and `(-0.0f0) + (+0.0f0)` is `+0.0`. Without this,
     return ifelse(iszero(s) & iszero(x.hi), Float64(x.hi), s)
 end
 
-Base.Float16(x::Double32) = Float16(x.hi)
+"""
+    Double32s.to_odd_hi(x::Double32) -> Float32
+
+The high word rounded **to odd** against the low word: `hi` itself when the
+pair is exact at `Float32` precision or `hi`'s significand is already odd,
+otherwise the `Float32` neighbor of `hi` on `lo`'s side.
+
+This is the required first step of every conversion narrower than `Float32`.
+`hi` alone is `RN₂₄(x)`, and rounding it again at `p < 24` bits misrounds
+exactly when `hi` lies on a tie of the `p`-bit lattice and `lo` breaks that
+tie — `RN_p(RN₂₄(v)) ≠ RN_p(v)` on those operands. Rounding the intermediate
+to odd instead of to nearest makes the composition exact for every `p ≤ 22`
+(Boldo–Melquiond), which covers `Float16` (11) and `BFloat16` (8).
+
+Derivation that the neighbor selection is round-to-odd: `lo ≠ 0` means the
+value is not a `Float32`, so `RO₂₄(v)` is whichever of the two enclosing
+`Float32`s has an odd significand. `hi = RN₂₄(v)` is one of the two, and the
+other lies on `lo`'s side of `hi` because `v = hi + lo`. If `hi` is odd it is
+the answer; otherwise the neighbor `nextfloat(hi, sign(lo))` is adjacent and
+therefore odd.
+
+At `hi = ±floatmax(Float32)` with `lo` pointing outward the neighbor is
+`±Inf32`; the narrower formats overflow at those magnitudes anyway, so the
+final rounding is unaffected.
+"""
+@inline function to_odd_hi(x::Double32)
+    h = x.hi
+    needs_nudge = isfinite(h) & !iszero(x.lo) &
+                  (reinterpret(UInt32, h) & 0x00000001 == 0x00000000)
+    return needs_nudge ? (x.lo > 0 ? nextfloat(h) : prevfloat(h)) : h
+end
+
+"""
+    Float16(x::Double32) -> Float16
+
+Correctly rounded to nearest. Goes through [`Double32s.to_odd_hi`](@ref):
+`Float16(x.hi)` alone is wrong on every pair whose high word is a `Float16`
+tie broken by the low word.
+"""
+Base.Float16(x::Double32) = Float16(to_odd_hi(x))
 Base.BigFloat(x::Double32; kw...) = big(x.hi) + big(x.lo)
 
 Base.AbstractFloat(x::Double32) = x

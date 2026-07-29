@@ -25,17 +25,20 @@ for non-finiteness.
 
 This is, operation for operation, **AccurateDWPlusDW** — Algorithm 6 of
 Joldeş, Muller & Popescu, *Tight and rigorous error bounds for basic building
-blocks of double-word arithmetic* (ACM TOMS 44(2), 2017) — whose relative error
-bound is
+blocks of double-word arithmetic*, ACM TOMS 44(2), Article 15res, 2017, DOI
+10.1145/3121432; the algorithm and its Theorem 3.1 are both on p. 15res:7 —
+whose relative error bound is
 
     |result − (x + y)| ≤ 3u²/(1 − 4u) · |x + y|,    u = 2⁻²⁴,
 
-proved in that paper and subsequently **machine-checked** (Coq/Flocq) by
+valid for every `p ≥ 3` (Theorem 3.1), proved in that paper and subsequently
+**machine-checked** (Coq/Flocq) and shown *asymptotically optimal* by
 Muller & Rideau, *Formalization of double-word arithmetic, and comments on
-"Tight and rigorous error bounds…"* (ACM TOMS 48(1), 2022). The formalization
-is generic in the precision, so the bound applies at p = 24, and it covers the
-two Fast2Sum steps — the algorithm's correctness does **not** rest on the
-`|a| ≥ |b|` precondition.
+"Tight and rigorous error bounds…"*, ACM TOMS 48(1), Article 9, 2022, DOI
+10.1145/3484514, §2.2 Property 2.1 (the algorithm is renumbered Algorithm 4
+there). The formalization is generic in the precision, so the bound applies at
+p = 24, and it covers the two Fast2Sum steps — the algorithm's correctness
+does **not** rest on the `|a| ≥ |b|` precondition.
 
 !!! note "Why the local `|a| ≥ |b|` justification was wrong, and why it doesn't matter"
     An earlier draft justified the two `two_hilo_sum_` calls with "`|hi| ≥ |c|`
@@ -688,7 +691,7 @@ Zero and non-finite arguments are returned unchanged, which is what
 # Examples
 ```jldoctest
 julia> significand(Double32(12.0f0))
-Double32(1.5f0, 0.0f0)
+1.5
 
 julia> significand(zero(Double32)), significand(Double32(Inf32))
 (Double32(0.0f0, 0.0f0), Double32(Inf32, 0.0f0))

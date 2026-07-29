@@ -1397,7 +1397,9 @@ Validate the boundary explicitly (section 23.4), not by sampling.
 
 #### Accurate default
 
-Algorithm 6 of Joldeş, Muller, and Popescu, relative error below `3u²`:
+Algorithm 6 of Joldeş, Muller, and Popescu (ACM TOMS 44(2), Article 15res,
+2017, p. 15res:7, Theorem 3.1; DOI 10.1145/3121432), relative error below
+`3u²/(1−4u)`:
 
 ```julia
 """

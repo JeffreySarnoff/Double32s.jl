@@ -8,30 +8,40 @@ AcceleratedKernels = "6a4ca0a5-0e36-4168-a932-d9be78d558f1"
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [weakdeps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+BFloat16s = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+DoubleFloats = "497a8b3b-efae-58df-a0af-a86822472b78"
 
 [extensions]
 Double32sAMDGPUExt = "AMDGPU"
+Double32sBFloat16sExt = "BFloat16s"
 Double32sCUDAExt = "CUDA"
+Double32sDoubleFloatsExt = "DoubleFloats"
 
 [compat]
 AMDGPU = "2"
 AcceleratedKernels = "0.4 - 0.6"
 Adapt = "4"
+BFloat16s = "0.5 - 0.6"
 CUDA = "6"
+DoubleFloats = "1"
 KernelAbstractions = "0.9 - 0.14"
 LinearAlgebra = "1"
+Printf = "1"
 Random = "1"
 julia = "1.12"
 
 [extras]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+BFloat16s = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+DoubleFloats = "497a8b3b-efae-58df-a0af-a86822472b78"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
@@ -39,4 +49,4 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "Printf", "TOML", "InteractiveUtils", "Adapt", "KernelAbstractions", "CUDA", "AMDGPU"]
+test = ["Test", "Printf", "TOML", "InteractiveUtils", "Adapt", "KernelAbstractions", "CUDA", "AMDGPU", "BFloat16s", "DoubleFloats"]

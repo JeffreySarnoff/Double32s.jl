@@ -40,13 +40,13 @@ operation can observe it (see the `show` docstring).
 # Examples
 ```jldoctest
 julia> Double32s.canonicalize(1.0f0, 2.0f0^-30)     # already canonical
-Double32(1.0f0, 9.313226f-10)
+1.0000000009313226
 
 julia> Double32s.canonicalize(2.0f0^-30, 1.0f0)     # words out of order
-Double32(1.0f0, 9.313226f-10)
+1.0000000009313226
 
 julia> Double32s.canonicalize(1.0f0, 0.5f0)         # |lo| > ulp(hi)/2: renormalizes
-Double32(1.5f0, 0.0f0)
+1.5
 ```
 """
 @inline function canonicalize(a::Float32, b::Float32)

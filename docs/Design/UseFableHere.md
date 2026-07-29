@@ -5,11 +5,17 @@
 than an error, ranked by how hard they are to get right and how unlikely a test
 suite is to notice.
 
-**Status of this revision (2026-07-28 20:01 EDT): nothing in this document is
-open.** Tier 0 and Tiers 1–3 are all closed, each with a measurement and a
-regression in `test/core/invariants.jl`. Two defects were found while closing
-Tier 3, and one claim in `DesignDouble32.md` §14.3 turned out to be folklore and
-has been replaced with what KA's source actually does — see 3.1.
+**Status of this revision (2026-07-29): nothing in this document is open,
+including Tier 4.** Tier 0 and Tiers 1–3 are all closed, each with a measurement
+and a regression in `test/core/invariants.jl`. Two defects were found while
+closing Tier 3, and one claim in `DesignDouble32.md` §14.3 turned out to be
+folklore and has been replaced with what KA's source actually does — see 3.1.
+Tier 4's four work items closed 2026-07-29; closing them surfaced **two new
+defects of already-catalogued families** — a narrowing-conversion double
+rounding (`Float16(x.hi)` misrounds low-word-broken ties; the 0.1/2.1 shape of
+"the high word alone is not the value") and a signed-zero erasure in a
+`BigFloat` conversion route (`big(-0.0) + big(0.0) == +0.0`; exactly the 0.2
+`reference` leak at a new site). Both fixed, both regression-tested. See Tier 4.
 
 Every Tier 1 item was independently re-derived and checked numerically against a
 400-bit `BigFloat` reference on Julia 1.12. **Both Tier 1 "fixes" were themselves
@@ -233,11 +239,13 @@ The `|hi| ≥ |c|` justification stays refuted (834 violations in 40,000
 structured additions, including `hi = -2^-24, c = -3·2^-25`). The general proof
 the previous revision asked for exists in the literature: `add_dd_` is,
 operation for operation, **AccurateDWPlusDW** — Algorithm 6 of Joldeş, Muller &
-Popescu (ACM TOMS 2017) — with relative error `≤ 3u²/(1-4u)`, and that proof
-was **machine-checked in Coq/Flocq by Muller & Rideau (ACM TOMS 2022)**,
-generic in the precision (hence valid at p = 24) and covering the Fast2Sum
-steps, so the algorithm's correctness never rested on the naive precondition.
-`sub_dd_` inherits the bound by exact negation.
+Popescu (ACM TOMS 44(2), Article 15res, 2017, Theorem 3.1, p. 15res:7) — with
+relative error `≤ 3u²/(1-4u)`, and that proof was **machine-checked in
+Coq/Flocq by Muller & Rideau (ACM TOMS 48(1), Article 9, 2022, §2.2 Property
+2.1)**, generic in the precision (hence valid at p = 24) and covering the
+Fast2Sum steps, so the algorithm's correctness never rested on the naive
+precondition. `sub_dd_` inherits the bound by exact negation. (Pages verified
+from the PDFs 2026-07-29 — Tier 4.2.)
 
 Standing evidence stays live: the `two_sum_` differential (0 disagreements over
 1.54M additions) remains in `test/core/eft.jl` as a regression, and the other
@@ -451,22 +459,92 @@ are described with their fixes.
 
 ---
 
-## Tier 4 — what is genuinely still open
+## Tier 4 — closed 2026-07-29
 
-Not defects; work that has not been done.
+Was "work that has not been done"; all four items are done. Recorded here with
+the same discipline as the defect tiers, because two of the four surfaced real
+defects while being closed.
 
-- **Roadmap phases 3–5** (§14.5 onward): warp-shuffle and wavefront reductions,
-  deterministic fixed-tree reduction, tiled matrix kernels. The first KA
-  reduction kernel written under the §14.3 rule above will be the first real
-  test of that rule.
-- **The JMP/Muller–Rideau citation should be page-referenced** when the PDFs are
-  at hand. The result is not in doubt; the pointer is imprecise.
-- **`Double32sBFloat16sExt` and `Double32sDoubleFloatsExt`** (§11.3 rule 4) are
-  specified and unwritten.
-- **A three-argument `show(io, ::MIME"text/plain", x)`** with a decimal
-  rendering and a round-trip promise (§11.5). Deliberately deferred: the pair
-  form is honest about the representation, and a decimal form that does not
-  round-trip would be worse than none.
+### 4.1 Roadmap phases 3–5 — already complete when this revision was written
+
+The list was stale, not open. `Checkpoint.md` records: warp-shuffle reduction
+implemented, measured at **0.48–0.56× the KA tree** (a 20-flop `Double32`
+operator inverts the "shuffle beats shared memory" folklore, which is a claim
+about 1-flop operators), and rejected per §15.2; the deterministic fixed tree
+is the *only* reduction path (nine repeated runs and the CPU backend all
+`===`); the tiled matmul shipped in Phase 5 and was later rebuilt
+split-channel (0.42 ms at 1024³ D32×D32). Verified against `src/` before
+closing — the entry, not the code, was behind.
+
+### 4.2 The JMP/Muller–Rideau citation — page-referenced from the PDFs
+
+Both PDFs fetched (HAL `hal-01351529` published version, `hal-02972245` author
+manuscript) and read at the cited locations, not transcribed from an index:
+
+- Joldeş, Muller & Popescu, ACM TOMS **44**(2), Article **15res**, Oct 2017,
+  DOI 10.1145/3121432. Algorithm 6 (AccurateDWPlusDW) and Theorem 3.1 — the
+  `3u²/(1−4u)` bound, `p ≥ 3` — are both on **p. 15res:7**, verified by
+  reading that page.
+- Muller & Rideau, ACM TOMS **48**(1), Article **9**, Feb 2022, DOI
+  10.1145/3484514. **§2.2, Property 2.1**: the bound is confirmed in Coq *and
+  proven asymptotically optimal*; the algorithm is renumbered Algorithm 4
+  there. In-article ACM page unverified (DL blocks fetching; the author
+  manuscript places it on preprint p. 6) — stated as such rather than guessed.
+
+One framing correction along the way: `3u²/(1−4u)` was **never a later fix**
+— it is Theorem 3.1 of the 2017 paper itself. The bound that was wrong was Li
+et al.'s earlier `2u²` claim, disproved on the same page. Applied at the three
+citation sites (`add_dd_` docstring, §8.1, `guide/accuracy.md`).
+
+### 4.3 `Double32sBFloat16sExt` and `Double32sDoubleFloatsExt` — written
+
+Both live in `ext/`, weakdeps only (`test/foreign.jl` asserts they never
+appear in `[deps]`). Closing them surfaced one existing core defect and one
+would-be defect, both of already-catalogued families:
+
+- **`Float16(x::Double32) = Float16(x.hi)` was wrong** on every pair whose
+  high word sits on a `Float16` tie broken by the low word — double rounding,
+  the 0.1/2.1 family: the high word alone is not the value. The BFloat16
+  conversion would have shipped the same defect. Fixed once, as a stated rule
+  scoped to the operation class that causes it (rule 5): every conversion
+  narrower than `Float32` goes through `to_odd_hi` — round the high word *to
+  odd* against the low word, then round nearest; exact for `p ≤ 22`
+  (Boldo–Melquiond), covering `Float16` (11) and `BFloat16` (8). Verified over
+  **4,772 constructed tie operands per format** (both §23.11 low-word
+  subclasses, negative mirrors), reference decided by `sign(lo)` independently
+  of the implementation; the retired rule misrounds ≥ ¼ of the pool and the
+  suite asserts that it *still does* (rule 9). BFloat16 round-trip is
+  exhaustive: all 65,536 patterns.
+- **`Double64 → Double32` through a default-precision `BigFloat` would
+  re-round**: a `Double64` pair spans up to ~2,150 bits, so the intermediate
+  runs at 2,200 bits, and correct rounding at pair-lattice ties is verified by
+  **neighbor minimality** (no adjacent pair closer; 72 constructed tie
+  operands, 0 failures), never by re-running the converter's own algorithm.
+  The zero path is guarded because `big(-0.0) + big(0.0)` is `+0.0` — the
+  Tier 0.2 `reference` leak, found at a new site by looking for it (rule 3).
+- DoubleFloats' own promotion bounds (`T<:IEEEFloat`, literal `::Type{Real}`)
+  never match `Double32`, so the extension's two rules
+  (`Double64` wins wide, `Double32` wins over `DoubleFloat{Float16}`) conflict
+  with nothing — checked by loading both and probing both directions, not by
+  reading the source alone (rule 7). The same-width pair
+  `DoubleFloat{Float32}` deliberately gets conversions but **no** promotion
+  rule: either direction would silently privilege one package's semantics.
+  `test/foreign.jl`: 142,520 assertions, `detect_ambiguities` still 0.
+
+### 4.4 Three-argument decimal `show` — written, with the promise checked per value
+
+`show(io, MIME"text/plain", x)` prints `Double32s.decimal(x)`: the shortest
+`%.Ng` string whose `parse(Double32, ·)` is `isequal` to `x` — **verified by
+parsing back before returning**, so the round-trip promise is checked at print
+time, not argued from digit counts. `parse`/`tryparse` route through a
+384-bit `BigFloat` (a canonical pair spans ≤ 277 bits; the Float64 habit of
+17 digits is *provably* insufficient here — wide-gap pairs need up to ~90
+digits, and `test/core/decimal.jl` asserts the 17-digit rendering is visibly
+wrong on `canonicalize(1.0f0, 2f0^-149)` while the emitted one round-trips).
+The pair form stays on two-argument `show`/`repr`, so both of §11.5's
+contracts hold at once. Round-trip verified over **2,414 pool operands**
+including both §23.11 subclasses (asserted present, rule 9), the §23.12
+signed-zero surface, and the non-finites.
 
 ---
 

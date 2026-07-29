@@ -80,7 +80,7 @@ julia> sizeof(op)
 0
 
 julia> op(Double32(1.0f0), Double32(2.0f0))
-Double32(3.0f0, 0.0f0)
+3.0
 ```
 """
 struct PolicyOp{F,P<:ArithmeticPolicy} <: Function

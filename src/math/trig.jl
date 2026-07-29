@@ -128,7 +128,7 @@ Evaluates exactly one polynomial kernel, selected by quadrant parity —
 # Examples
 ```jldoctest
 julia> sin(zero(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> abs(Float64(sin(Double32s.PI_D32))) < 1e-14   # PI_D32 is not exactly π
 true
@@ -153,7 +153,7 @@ Cosine. Same argument-range policy and single-kernel dispatch as
 # Examples
 ```jldoctest
 julia> cos(zero(Double32))
-Double32(1.0f0, 0.0f0)
+1.0
 ```
 """
 function Base.cos(x::Double32)
@@ -247,7 +247,7 @@ slowest and, at 4.00 ulp48, the least accurate primitive in the package.
 # Examples
 ```jldoctest
 julia> atan(zero(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> Float64(4 * atan(one(Double32)))
 3.1415926535897967

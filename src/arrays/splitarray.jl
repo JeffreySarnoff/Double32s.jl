@@ -33,10 +33,10 @@ machinery in with it.
 julia> A = Double32s.SplitDouble32Array([1.0f0, 2.0f0], [0.0f0, 0.0f0]);
 
 julia> A[2]
-Double32(2.0f0, 0.0f0)
+2.0
 
 julia> A[1] = Double32(1.0f0) / 3;  A[1]
-Double32(0.33333334f0, -9.934108f-9)
+0.333333333333333
 ```
 """
 struct SplitDouble32Array{N,AH<:AbstractArray{Float32,N},

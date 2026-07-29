@@ -17,7 +17,7 @@ entirely on `Float32` execution units.
 julia> using Double32s
 
 julia> x = Double32(1.0f0) / 3
-Double32(0.33333334f0, -9.934108f-9)
+0.333333333333333
 
 julia> Float64(x)
 0.33333333333333304

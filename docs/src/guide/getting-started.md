@@ -23,16 +23,16 @@ From the types you already have:
 
 ```jldoctest
 julia> Double32(1.0f0)                    # Float32: exact, free
-Double32(1.0f0, 0.0f0)
+1.0
 
 julia> Double32(0.1)                      # Float64: rounded into ~48 bits
-Double32(0.1f0, -1.4901161f-9)
+0.1
 
 julia> Double32(2^24 + 1)                 # integers wider than Float32 keep their bits
-Double32(1.6777216f7, 1.0f0)
+16777217.0
 
 julia> Double32(1//3)                     # host-only: Rational via BigFloat
-Double32(0.33333334f0, -9.934108f-9)
+0.333333333333333
 ```
 
 The two-argument constructor takes a pair of `Float32` words and
@@ -40,14 +40,25 @@ canonicalizes them — any pair, in any order, overlapping or not:
 
 ```jldoctest
 julia> Double32(2.0f0^-30, 1.0f0)         # words out of order: fixed
-Double32(1.0f0, 9.313226f-10)
+1.0000000009313226
 
 julia> Double32(1.0f0, 0.5f0)             # overlapping words: renormalized
-Double32(1.5f0, 0.0f0)
+1.5
 ```
 
-`show` prints the exact pair, and the printed form reconstructs the value —
-that is Base's round-trip contract for two-argument `show`.
+The REPL displays a `Double32` as a decimal — the *shortest* one that parses
+back to the identical value via `parse(Double32, s)`, checked per value before
+printing. The exact pair is still there: `repr` (two-argument `show`) prints
+`Double32(hi, lo)`, and that form reconstructs the value too — Base's
+round-trip contract, kept by both renderings.
+
+```jldoctest
+julia> repr(Double32(1.0f0) / 3)          # the representation, on request
+"Double32(0.33333334f0, -9.934108f-9)"
+
+julia> parse(Double32, "0.333333333333333") === Double32(1.0f0) / 3
+true
+```
 
 ## Arithmetic
 
@@ -68,10 +79,10 @@ julia> Float64(a + a + a)
 0.9999999999999991
 
 julia> sqrt(Double32(2.0f0))^2
-Double32(2.0f0, 0.0f0)
+2.0
 
 julia> fma(Double32(2.0f0), Double32(3.0f0), one(Double32))   # compensated, not hardware-fused
-Double32(7.0f0, 0.0f0)
+7.0
 ```
 
 Mixed expressions promote the way you would expect — and one case deserves
@@ -79,10 +90,10 @@ attention:
 
 ```jldoctest
 julia> one(Double32) + 1                  # integers promote to Double32
-Double32(2.0f0, 0.0f0)
+2.0
 
 julia> one(Double32) + 1.0f0              # Float32 promotes to Double32
-Double32(2.0f0, 0.0f0)
+2.0
 
 julia> one(Double32) + 1.0                # Float64 WINS: wider in both directions
 2.0
@@ -132,10 +143,10 @@ julia> precision(Double32), precision(Double32; base = 10)
 (48, 14)
 
 julia> eps(Double32)                      # nominal 48-bit ulp — see the warning below
-Double32(7.1054274f-15, 0.0f0)
+7.105427357601001858711242675781e-15
 
 julia> floatmax(Double32)
-Double32(3.4028235f38, 1.0141204f31)
+3.40282356779733e+38
 
 julia> typemax(Double32), typemin(Double32)
 (Double32(Inf32, 0.0f0), Double32(-Inf32, 0.0f0))

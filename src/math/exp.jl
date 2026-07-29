@@ -92,7 +92,7 @@ exponent.
 # Examples
 ```jldoctest
 julia> exp(zero(Double32))
-Double32(1.0f0, 0.0f0)
+1.0
 
 julia> Float64(exp(Double32(1.0f0)))
 2.718281828459041
@@ -129,7 +129,7 @@ four code paths with two.
 # Examples
 ```jldoctest
 julia> expm1(zero(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> x = Double32(1.0f-7);
 

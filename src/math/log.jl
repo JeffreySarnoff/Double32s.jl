@@ -102,13 +102,13 @@ Throws a `DomainError` for a negative argument, matching `log(::Float32)`. Use
 # Examples
 ```jldoctest
 julia> log(one(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> Float64(log(Double32(2.0f0)))
 0.6931471805599454
 
 julia> log(Double32(0.0f0))
-Double32(-Inf32, 0.0f0)
+-Inf
 ```
 """
 function Base.log(x::Double32)
@@ -167,10 +167,10 @@ Three regimes, all division-free:
 # Examples
 ```jldoctest
 julia> log1p(zero(Double32))
-Double32(0.0f0, 0.0f0)
+0.0
 
 julia> log1p(Double32(-1.0f0))
-Double32(-Inf32, 0.0f0)
+-Inf
 ```
 """
 function Base.log1p(x::Double32)
@@ -210,7 +210,7 @@ the sum, spending rounding on a term that was exact.
 # Examples
 ```jldoctest
 julia> log2(Double32(1024.0f0))
-Double32(10.0f0, 0.0f0)
+1e+01
 ```
 """
 function Base.log2(x::Double32)

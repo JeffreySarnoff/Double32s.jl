@@ -53,10 +53,10 @@ into itself.
 # Examples
 ```jldoctest
 julia> Double32(2.0f0)^10
-Double32(1024.0f0, 0.0f0)
+1024.0
 
 julia> Double32(2.0f0)^-30
-Double32(9.313226f-10, 0.0f0)
+9.31322574615478515625e-10
 ```
 """
 function Base.:^(x::Double32, n::Integer)

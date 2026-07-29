@@ -16,6 +16,7 @@ module Double32s
 
 using Adapt
 using LinearAlgebra: LinearAlgebra
+using Printf: Printf
 using KernelAbstractions
 const KA = KernelAbstractions
 using AcceleratedKernels

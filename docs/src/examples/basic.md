@@ -12,7 +12,7 @@ about 48 significant bits — ~14 decimal digits — where `Float32` keeps ~7:
 julia> using Double32s
 
 julia> x = Double32(1.0f0) / 3
-Double32(0.33333334f0, -9.934108f-9)
+0.333333333333333
 
 julia> Float64(x)               # ~14 correct digits
 0.33333333333333304
@@ -109,13 +109,13 @@ Operations that should be exact, are, and stay inside the type:
 
 ```jldoctest basic
 julia> Double32(2.0f0)^10
-Double32(1024.0f0, 0.0f0)
+1024.0
 
 julia> log2(Double32(1024.0f0))
-Double32(10.0f0, 0.0f0)
+1e+01
 
 julia> Double32(1.0f0) + 0.5f0          # Float32 promotes to Double32
-Double32(1.5f0, 0.0f0)
+1.5
 ```
 
 `Double32` widens the significand, **not** the exponent: overflow happens at

@@ -28,10 +28,10 @@ is exact. Without that reduction the `Float32` seed underflows to zero below
 # Examples
 ```jldoctest
 julia> cbrt(Double32(27.0f0))
-Double32(3.0f0, 0.0f0)
+3.0
 
 julia> cbrt(Double32(-8.0f0))
-Double32(-2.0f0, 0.0f0)
+-2.0
 
 julia> Float64(cbrt(Double32(2.0f0)))
 1.2599210498948725
@@ -84,10 +84,10 @@ accuracy, and nothing extra to maintain.
 # Examples
 ```jldoctest
 julia> Double32s.rsqrt(Double32(4.0f0))
-Double32(0.5f0, 0.0f0)
+0.5
 
 julia> Double32s.rsqrt(Double32(0.0f0))
-Double32(Inf32, 0.0f0)
+Inf
 
 julia> isnan(Double32s.rsqrt(Double32(-1.0f0)))
 true

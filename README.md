@@ -8,6 +8,72 @@ A GPU-oriented double-word float: `Double32` carries about 48 significant bits
 as the unevaluated sum of two `Float32` words, while keeping the `Float32`
 exponent range.
 
+## This package is not yet registered
+
+### Installation
+
+`Double32s.jl` is not registered in the Julia General registry, so install it directly from GitHub.
+
+From the Julia REPL, press `]` to enter package mode:
+
+```julia
+(@v1.x) pkg> add https://github.com/JeffreySarnoff/Double32s.jl
+```
+
+Or equivalently:
+
+```julia
+julia> using Pkg
+julia> Pkg.add(url="https://github.com/JeffreySarnoff/Double32s.jl")
+```
+
+### Using it in a project environment (recommended)
+
+```bash
+mkdir myproject && cd myproject
+julia --project=.
+```
+
+```julia
+(myproject) pkg> add https://github.com/JeffreySarnoff/Double32s.jl
+```
+
+```julia
+(myproject) pkg> instantiate
+```
+
+### Development mode
+
+To clone the source locally and edit it:
+
+```julia
+(@v1.x) pkg> dev https://github.com/JeffreySarnoff/Double32s.jl
+```
+
+The repo lands in `~/.julia/dev/Double32s/`. Pair with [Revise.jl](https://github.com/timholy/Revise.jl) for live reloading.
+
+### Usage
+
+```julia
+using Double32s
+
+# Add a minimal example here.
+```
+
+### Updating
+
+```julia
+(@v1.x) pkg> update Double32s
+```
+
+### Requirements
+
+- Julia 1.12 or later
+- Git available on your `PATH`
+
+----
+----
+
 ```julia
 julia> using Double32s
 

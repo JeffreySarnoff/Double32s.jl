@@ -65,7 +65,7 @@ Package names exist only where Base has no spelling:
 julia> x32 = Float32[1, 2, 3]; y32 = Float32[4, 5, 6];
 
 julia> Double32s.compensated_dot(x32, y32)      # each product formed EXACTLY
-Double32(32.0f0, 0.0f0)
+32.0
 ```
 
 [`Double32s.compensated_dot`](@ref) forms every `Float32×Float32` product
