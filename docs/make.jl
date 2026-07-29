@@ -9,6 +9,11 @@ makedocs(;
     sitename="Double32s.jl",
     checkdocs=:exports,
     format=Documenter.HTML(;
+        # Pretty URLs put every page at `page/index.html`, which reads as a
+        # directory link when the built docs are browsed from the filesystem.
+        # Keep them for CI deployment only; a local build emits `page.html`
+        # so every link resolves immediately.
+        prettyurls=get(ENV, "CI", nothing) == "true",
         canonical="https://JeffreySarnoff.github.io/Double32.jl",
         edit_link="main",
         assets=String[],
