@@ -67,31 +67,30 @@ cover every use in this package.
 
 All arrays must share `axes`, and `dest` must be distinct from the inputs.
 """
-function ak_map!(f, dest::AbstractArray, a::AbstractArray;
-                 backend = KA.get_backend(dest), kwargs...)
+function ak_map!(f, dest::AbstractArray, a::AbstractArray; kwargs...)
     _same_axes(dest, a)
     isempty(dest) && return dest
-    AK.foreachindex(dest, backend; kwargs...) do i
+    AK.foreachindex(dest, KA.get_backend(dest); kwargs...) do i
         @inbounds dest[i] = f(a[i])
     end
     return dest
 end
 
 function ak_map!(f, dest::AbstractArray, a::AbstractArray, b::AbstractArray;
-                 backend = KA.get_backend(dest), kwargs...)
+                 kwargs...)
     _same_axes(dest, a, b)
     isempty(dest) && return dest
-    AK.foreachindex(dest, backend; kwargs...) do i
+    AK.foreachindex(dest, KA.get_backend(dest); kwargs...) do i
         @inbounds dest[i] = f(a[i], b[i])
     end
     return dest
 end
 
 function ak_map!(f, dest::AbstractArray, a::AbstractArray, b::AbstractArray,
-                 c::AbstractArray; backend = KA.get_backend(dest), kwargs...)
+                 c::AbstractArray; kwargs...)
     _same_axes(dest, a, b, c)
     isempty(dest) && return dest
-    AK.foreachindex(dest, backend; kwargs...) do i
+    AK.foreachindex(dest, KA.get_backend(dest); kwargs...) do i
         @inbounds dest[i] = f(a[i], b[i], c[i])
     end
     return dest

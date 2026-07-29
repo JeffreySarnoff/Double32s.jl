@@ -47,12 +47,17 @@ Neither is wrong; only one is reproducible.
 
 Extra keywords pass through to `AcceleratedKernels.mapreduce` — `block_size`,
 `temp`, `switch_below`, `dims`.
+
+The backend is always `KernelAbstractions.get_backend(A)` — the backend that
+owns the memory is the only one that can run the kernel, so it is derived,
+never a parameter. (An earlier draft exposed it as a keyword; the only thing
+that keyword could express was a backend mismatched to the data, which no
+backend can execute.)
 """
-function ak_mapreduce(f, op, A::AbstractArray, neutral::T;
-                      backend = KA.get_backend(A), kwargs...) where {T}
+function ak_mapreduce(f, op, A::AbstractArray, neutral::T; kwargs...) where {T}
     isempty(A) && return neutral
-    return AK.mapreduce(f, op, A, backend; init = neutral, neutral = neutral,
-                        kwargs...)
+    return AK.mapreduce(f, op, A, KA.get_backend(A);
+                        init = neutral, neutral = neutral, kwargs...)
 end
 
 """
@@ -140,15 +145,16 @@ Products below `2⁻¹⁰¹` lose their residual to subnormal underflow; see
 [`Double32s.has_gradual_underflow`](@ref).
 """
 function ak_dot(x::AbstractArray, y::AbstractArray;
-                policy::ArithmeticPolicy = DEFAULT_POLICY,
-                backend = KA.get_backend(x), kwargs...)
+                policy::ArithmeticPolicy = DEFAULT_POLICY, kwargs...)
     axes(x) == axes(y) || throw(DimensionMismatch(
         lazy"x has axes $(axes(x)) but y has axes $(axes(y))"))
     isempty(x) && return zero(Double32)
-    idx = KA.allocate(backend, Int32, length(x))
+    # The index array must live where the data lives; the reduction then
+    # derives the same backend from it.
+    idx = KA.allocate(KA.get_backend(x), Int32, length(x))
     copyto!(idx, Int32.(1:length(x)))
     return ak_mapreduce(ZipProduct(x, y), PolicyOp(add, policy), idx,
-                        zero(Double32); backend, kwargs...)
+                        zero(Double32); kwargs...)
 end
 
 # ----------------------------------------------------------------- norm2 ---
@@ -181,14 +187,14 @@ extra reduction pass to find. Scaling by a power of two is exact, so the only
 error is the summation and the final `sqrt`.
 """
 function ak_norm2(x::AbstractArray; policy::ArithmeticPolicy = DEFAULT_POLICY,
-                  backend = KA.get_backend(x), kwargs...)
+                  kwargs...)
     isempty(x) && return zero(Double32)
-    m = ak_mapreduce(LeadMagnitude(), max, x, 0.0f0; backend, kwargs...)
+    m = ak_mapreduce(LeadMagnitude(), max, x, 0.0f0; kwargs...)
     iszero(m) && return zero(Double32)
     isfinite(m) || return Double32(m)              # Inf or NaN propagates
     k = raw_exponent(m)
     scale = ldexp(1.0f0, -k)
     ss = ak_mapreduce(ScaledSquare(scale), PolicyOp(add, policy), x,
-                      zero(Double32); backend, kwargs...)
+                      zero(Double32); kwargs...)
     return ldexp(sqrt_or_nan(ss), k)
 end

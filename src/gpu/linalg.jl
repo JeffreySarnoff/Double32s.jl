@@ -228,9 +228,12 @@ the tile loop fixes the summation order. Since the reductions moved to
 routine in the package.
 
 # Keyword arguments
-- `backend` — defaults to `KernelAbstractions.get_backend(C)`.
 - `tile` — workgroup edge, default [`MATMUL_TILE`](@ref); a power of two.
 - `block` — register-blocking factor, default [`MATMUL_BLOCK`](@ref).
+
+The backend is always `KernelAbstractions.get_backend(C)`: the backend that
+owns the output is the only one that can run the kernel, so it is derived,
+never a parameter.
 
 There is no `policy` keyword: the split-channel accumulation *is* the
 algorithm, and it is both faster than the `StrictPolicy` pair chain and holds
@@ -239,7 +242,6 @@ be surface area without a decision behind it.
 """
 function ak_matmul!(C::AbstractMatrix{Double32},
                     A::AbstractMatrix, B::AbstractMatrix;
-                    backend = KA.get_backend(C),
                     tile::Int = MATMUL_TILE,
                     block::Int = MATMUL_BLOCK)
     M, K = size(A)
@@ -259,7 +261,7 @@ function ak_matmul!(C::AbstractMatrix{Double32},
     # The bounds-free path: square, and an exact multiple of the output block,
     # so no work item can address outside any of the three matrices.
     exact = (M == N == K) && iszero(M % bs)
-    _matmul_impl(C, A, B, M, N, K, backend,
+    _matmul_impl(C, A, B, M, N, K, KA.get_backend(C),
                  Val(TE), Val(tile), Val(block), Val(exact))
     return C
 end
@@ -289,9 +291,8 @@ julia> Float64.(Double32s.ak_matmul(A, B))
  43.0  50.0
 ```
 """
-function ak_matmul(A::AbstractMatrix, B::AbstractMatrix;
-                   backend = KA.get_backend(A), kwargs...)
-    C = KA.allocate(backend, Double32, size(A, 1), size(B, 2))
+function ak_matmul(A::AbstractMatrix, B::AbstractMatrix; kwargs...)
+    C = KA.allocate(KA.get_backend(A), Double32, size(A, 1), size(B, 2))
     fill!(C, zero(Double32))
-    return ak_matmul!(C, A, B; backend, kwargs...)
+    return ak_matmul!(C, A, B; kwargs...)
 end
