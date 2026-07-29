@@ -19,7 +19,7 @@ if !isfile(joinpath(@__DIR__, "Manifest.toml"))
 end
 Pkg.instantiate(; io = devnull)
 
-using Double32s, Printf
+using Double32s, LinearAlgebra, Printf
 using CUDA, KernelAbstractions
 const KA = KernelAbstractions
 
@@ -94,13 +94,13 @@ open(OUT, "w") do io
     lc = Double32s.launch_config(CUDABackend())
     println(io, "- used: **", lc.groupsize, "** threads")
     println(io, "- CUDA `launch_configuration` suggests: **", lc.suggested, "** threads\n")
-    println(io, "Measured `ak_sum` over 50 M `Float32`, at several block sizes:\n")
+    println(io, "Measured `sum(Double32, A)` over 50 M `Float32`, at several block sizes:\n")
     N = 50_000_000
     A = CUDA.rand(Float32, N)
     println(io, "| block size | time |")
     println(io, "|----------:|-----:|")
     for W in (128, 256, 512, 1024)
-        @printf(io, "| %d | %.3f ms |\n", W, timeit(() -> Double32s.ak_sum(A; block_size = W)))
+        @printf(io, "| %d | %.3f ms |\n", W, timeit(() -> sum(Double32, A; block_size = W)))
     end
     println(io, "\nThe occupancy heuristic maximizes resident warps to hide memory")
     println(io, "latency. These reductions are arithmetic bound on `Double32` addition,")
@@ -111,15 +111,15 @@ open(OUT, "w") do io
     B = CUDA.rand(Float32, N)
     Ad = CuArray(Double32.(Array(A)))
     D = similar(Ad)
-    rows = (("`ak_sum(A::CuArray{Float32})`",    () -> Double32s.ak_sum(A)),
+    rows = (("`sum(Double32, A::CuArray{Float32})`",    () -> sum(Double32, A)),
             ("`sum(Double32, A)`",               () -> sum(Double32, A)),
-            ("`ak_sum(A::CuArray{Double32})`",   () -> Double32s.ak_sum(Ad)),
+            ("`sum(A::CuArray{Double32})`",   () -> sum(Double32, Ad)),
             ("`sum(A::CuArray{Double32})`",      () -> sum(Ad)),
             ("`sum(A::CuArray{Float32})`",       () -> sum(A)),
-            ("`ak_dot(A, B)`",                   () -> Double32s.ak_dot(A, B)),
+            ("`dot(Double32, A, B)`",                   () -> dot(Double32, A, B)),
             ("`sum(A .* B)`",                    () -> sum(A .* B)),
-            ("`ak_norm2(A)`",                    () -> Double32s.ak_norm2(A)),
-            ("`ak_map!(x->x*x, D, Ad)`",         () -> Double32s.ak_map!(x -> x * x, D, Ad)),
+            ("`norm2(A)`",                    () -> Double32s.norm2(A)),
+            ("`map!(x->x*x, D, Ad)`",         () -> map!(x -> x * x, D, Ad)),
             ("`D .= Ad .* Ad`",                  () -> (D .= Ad .* Ad)))
     println(io, "50 M elements.\n")
     println(io, "| call | time |")
@@ -143,10 +143,10 @@ open(OUT, "w") do io
         dA = CuArray(Ah); dB = CuArray(Bh)
         dAd = CuArray(Double32.(Ah)); dBd = CuArray(Double32.(Bh))
         Cd = CuArray{Double32}(undef, n, n)
-        td = timeit(() -> Double32s.ak_matmul!(Cd, dA, dB), 5)
-        tdd = timeit(() -> Double32s.ak_matmul!(Cd, dAd, dBd), 5)
+        td = timeit(() -> Double32s.matmul!(Cd, dA, dB), 5)
+        tdd = timeit(() -> Double32s.matmul!(Cd, dAd, dBd), 5)
         tf = timeit(() -> dA * dB, 5)
-        Double32s.ak_matmul!(Cd, dA, dB)
+        Double32s.matmul!(Cd, dA, dB)
         ref = Float64.(Ah) * Float64.(Bh)
         scale = maximum(abs.(ref))
         ed = maximum(abs.(Float64.(Array(Cd)) .- ref)) / scale
@@ -179,7 +179,7 @@ open(OUT, "w") do io
     println(io, "The direct kernel's apparent 8% edge turned out to be an artifact:")
     println(io, "the KA driver was calling `synchronize` after *every* reduction pass.")
     println(io, "Successive launches on one backend are queue-ordered, so those syncs")
-    println(io, "were unnecessary. Removing them took `ak_sum` from 0.444 ms to")
+    println(io, "were unnecessary. Removing them took `sum(Double32, A)` from 0.444 ms to")
     println(io, "0.414 ms and closed the gap to 1.5%. The fix is portable — every")
     println(io, "backend gets it — which is strictly better than a vendor-specific")
     println(io, "duplicate of the same algorithm.")

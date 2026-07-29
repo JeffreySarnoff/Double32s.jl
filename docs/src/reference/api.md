@@ -87,7 +87,7 @@ sqrt_or_nan
 compensated_dot
 compensated_sum
 compensated_mapreduce
-norm2
+compensated_norm2
 ```
 
 ## Structure-of-arrays
@@ -104,20 +104,28 @@ allocate_split_host
 
 ## [The portable execution layer](@id ka-layer)
 
-Declared here, implemented by the `KernelAbstractions` extension. Loading
-`KernelAbstractions`, `CUDA`, or `AMDGPU` brings them to life.
+Built on `AcceleratedKernels` and `KernelAbstractions`, both hard
+dependencies: everything here runs on `CPU()` out of the box, and on
+`CUDABackend()`/`ROCBackend()` once the vendor package is loaded. What can be
+a method of the `Base` or `LinearAlgebra` generic **is** one, with `Double32`
+somewhere in the signature: `sum(Double32, A)` and `dot(Double32, x, y)`
+spell "accumulate in `Double32`" for any input element type, and `sum`,
+`mapreduce`, `reduce`, `map!`, and `dot` on `Double32` data dispatch here on
+their own. Only `norm2`, `matmul`, and `matmul!` are package-local names —
+no generic exists to extend.
 
 ```@docs
-ak_sum
-ak_dot
-ak_norm2
-ak_mapreduce
-ak_reduce
-ak_map!
+Base.sum(::Type{Double32}, ::DenseArray)
+LinearAlgebra.dot(::Type{Double32}, ::AbstractArray, ::AbstractArray)
+LinearAlgebra.dot(::StridedVector{Double32}, ::StridedVector{Double32})
+norm2
+Base.mapreduce(::Any, ::Any, ::AbstractArray, ::Double32)
+Base.reduce(::Any, ::AbstractArray, ::Double32)
+Base.map!(::Any, ::AbstractArray{Double32}, ::AbstractArray)
 DEFAULT_GROUPSIZE
 PolicyOp
-ak_matmul
-ak_matmul!
+matmul
+matmul!
 MATMUL_TILE
 MATMUL_BLOCK
 launch_config

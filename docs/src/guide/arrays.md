@@ -71,18 +71,19 @@ Double32(32.0f0, 0.0f0)
 [`Double32s.compensated_dot`](@ref) forms every `Float32×Float32` product
 exactly as a pair (`two_prod_`) *before* accumulating, so no information is
 lost until the accumulation itself — strictly better than rounding each
-product to `Float32` first. [`Double32s.norm2`](@ref) adds an exact
+product to `Float32` first. [`Double32s.compensated_norm2`](@ref) adds an exact
 power-of-two scaling so squares neither overflow nor underflow:
 
 ```julia
-julia> Double32s.norm2(Double32[1f30, 1f30])    # Float32 squares would overflow
+julia> Double32s.compensated_norm2(Double32[1f30, 1f30])   # Float32 squares would overflow
 Double32(1.4142136f30, 9.023091f22)
 ```
 
 [`Double32s.compensated_sum`](@ref) and
 [`Double32s.compensated_mapreduce`](@ref) exist for one reason: they pin a
 *sequential* order for reproducibility work. Prefer `sum(Double32, A)`
-otherwise — Base's pairwise tree is more accurate.
+otherwise — it is the parallel AcceleratedKernels tree, reproducible per
+backend for a pinned block size.
 
 ## Struct-of-arrays: [`SplitDouble32Array`](@ref)
 

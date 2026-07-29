@@ -81,7 +81,7 @@ pkg> add Double32s
 
 That is the whole install. `Double32s` depends on `AcceleratedKernels`,
 `KernelAbstractions`, `Adapt`, and `Random` — a host-only user still pulls **no
-vendor stack**, and every `ak_*` parallel routine works on `CPU()` out of the
+vendor stack**, and the whole parallel layer works on `CPU()` out of the
 box. GPU support arrives as **package extensions**, activated by whatever you
 load:
 
@@ -91,7 +91,7 @@ pkg> add CUDA        # or AMDGPU, or KernelAbstractions alone
 
 | you load | what activates |
 |---|---|
-| nothing | scalar, arrays, elementary functions, **all `ak_*` routines on `CPU()`**, capability probe |
+| nothing | scalar, arrays, elementary functions, **the whole parallel layer on `CPU()`**, capability probe |
 | `CUDA` | the same routines on `CUDABackend()`, plus `device`, `capability`, `math_mode` in [`capability_report`](@ref) |
 | `AMDGPU` | the same on `ROCBackend()`, plus `device`, `gcn_arch` |
 

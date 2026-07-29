@@ -1,7 +1,7 @@
 # [Advanced Uses](@id examples-advanced)
 
 These examples use the compensated kernels, the linear-algebra layer, the
-structure-of-arrays representation, and the GPU-portable `ak_*` routines.
+structure-of-arrays representation, and the GPU-portable parallel routines.
 Everything except the final GPU section runs on a plain CPU and is checked by
 the documentation build.
 
@@ -77,20 +77,21 @@ true
 `Double32s.allocate_split(backend, n)` allocates the split form directly on
 any `KernelAbstractions` backend, host included.
 
-## Portable parallel routines: the `ak_*` family
+## Portable parallel routines
 
-The `ak_*` routines run on any `KernelAbstractions` backend through
+The parallel layer runs on any `KernelAbstractions` backend through
 AcceleratedKernels — the **same call** works on `CPU()` with nothing
 installed, and on `CUDABackend()` or `ROCBackend()` once the vendor package
-is loaded:
+is loaded. The spellings are the `Base` and `LinearAlgebra` generics, with
+the accumulator type as the first argument when the inputs are `Float32`:
 
 ```jldoctest advanced
 julia> v = Float32.(1 ./ (1:100_000));
 
-julia> Float64(Double32s.ak_sum(v))            # Float32 in, Double32 out
+julia> Float64(sum(Double32, v))               # Float32 in, Double32 out
 12.09014619539721
 
-julia> Float64(Double32s.ak_dot(v, v))         # products formed exactly
+julia> Float64(dot(Double32, v, v))            # products formed exactly
 1.6449240820936808
 ```
 
@@ -112,8 +113,8 @@ dx = CuArray(Double32.(Float32.(1:1_000_000) ./ 3))
 dy = exp.(log.(dx))                    # elementary functions in-kernel
 
 # Reductions and matmul on the device:
-s = Double32s.ak_sum(dx)               # Double32 result
-C = Double32s.ak_matmul(dA, dB)        # split-channel tiled kernel;
+s = sum(dx)                            # Double32 result, AK tree
+C = Double32s.matmul(dA, dB)           # split-channel tiled kernel;
                                        # CPU and CUDA agree bit-for-bit
 
 # Capability probe runs ON the backend it reports about:

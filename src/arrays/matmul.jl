@@ -324,10 +324,21 @@ end
 """
     dot(x::StridedVector{Double32}, y::StridedVector{Double32}) -> Double32
 
-Channel-compensated dot product — the same accumulation the matrix multiply
-uses, one renormalization at the end. Sequential in `k` (the TwoSum chain is a
+Dot product of `Double32` vectors.
+
+On the host: the channel-compensated accumulation the matrix multiply uses,
+one renormalization at the end. Sequential in `k` (the TwoSum chain is a
 loop-carried dependency), which still measures far ahead of the generic
 pairwise reduction over pair arithmetic.
+
+On any other backend: the AcceleratedKernels reduction — see
+[`dot(Double32, x, y)`](@ref LinearAlgebra.dot(::Type{Double32}, ::AbstractArray, ::AbstractArray)).
+The signature and the branch are both load-bearing: `CuVector` **is** a
+`StridedVector`, so array-type dispatch cannot separate host from device —
+the backend test does, and it is a compile-time constant. And the bound must
+stay `StridedVector`, not `AbstractVector`: sparse vectors are non-strided,
+and an `AbstractVector` method is ambiguous against `SparseArrays`' own
+`dot` specializations.
 
 `Double32` is real, so `dot` needs no conjugation.
 """
@@ -335,5 +346,7 @@ function LinearAlgebra.dot(x::StridedVector{Double32}, y::StridedVector{Double32
     K = length(x)
     length(y) == K || throw(DimensionMismatch(
         lazy"x has length $K but y has length $(length(y))"))
+    KA.get_backend(x) isa KA.CPU ||
+        return LinearAlgebra.dot(Double32, x, y)
     return _cdot_cols(reshape(x, K, 1), 1, reshape(y, K, 1), 1, K)
 end

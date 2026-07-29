@@ -23,87 +23,120 @@
 # AK provides no GEMM, so `gpu/linalg.jl` still writes a
 # `KernelAbstractions.@kernel` directly — which is why `KernelAbstractions` is a
 # direct dependency rather than reached transitively through AK.
+#
+# **Naming.** These were `ak_sum`, `ak_dot`, … The prefix is gone: what can be
+# a method of the Base or LinearAlgebra generic **is one** — with an owned type
+# (`Double32`) somewhere in the signature, so nothing is pirated and no
+# `Float32`-only call changes meaning. `sum(Double32, A)` and
+# `dot(Double32, x, y)` spell "accumulate in Double32" for any input eltype;
+# `sum(A)`/`dot(x, y)` on `Double32` data take these paths by dispatch. Only
+# `norm2` keeps a package-local name — `LinearAlgebra` has no `norm2`.
 
-"""
-    Double32s.ak_mapreduce(f, op, A, neutral; kwargs...) -> Double32
-
-Parallel reduction of `op(f(A[1]), f(A[2]), …)` on whatever backend owns `A`,
-returning a host scalar. Wrapper over `AcceleratedKernels.mapreduce`.
-
-`neutral` must be the identity of `op` and **fixes the accumulator type**. It is
-positional rather than a keyword because AK's own default,
-`neutral_element(op, eltype(src))`, is the wrong type for this package's
-headline pattern: reducing a `Vector{Float32}` into a `Double32` accumulator
-needs `zero(Double32)`, not `zero(Float32)`. Requiring it makes the accumulator
-type impossible to get wrong — the same rule design section 14.4 states as
-advice, expressed as a signature.
-
-**Determinism.** For a fixed `block_size` and length the tree shape is fixed, so
-the result is reproducible across runs *and across backends* — a CPU and a CUDA
-reduction of the same array return the same bits, which the test suite asserts.
-It is **not** the same answer as `sum(A)`, whose tree GPUArrays chooses;
-`Double32` addition is not associative, so those differ in the last places.
-Neither is wrong; only one is reproducible.
-
-Extra keywords pass through to `AcceleratedKernels.mapreduce` — `block_size`,
-`temp`, `switch_below`, `dims`.
-
-The backend is always `KernelAbstractions.get_backend(A)` — the backend that
-owns the memory is the only one that can run the kernel, so it is derived,
-never a parameter. (An earlier draft exposed it as a keyword; the only thing
-that keyword could express was a backend mismatched to the data, which no
-backend can execute.)
-"""
-function ak_mapreduce(f, op, A::AbstractArray, neutral::T; kwargs...) where {T}
+# The shared core. No owned-type constraint here, so it stays internal: the
+# public methods below each carry `Double32` in their signatures.
+function _mapreduce_impl(f, op, A::AbstractArray, neutral::T; kwargs...) where {T}
     isempty(A) && return neutral
     return AK.mapreduce(f, op, A, KA.get_backend(A);
                         init = neutral, neutral = neutral, kwargs...)
 end
 
 """
-    Double32s.ak_reduce(op, A, neutral; kwargs...) -> Double32
+    mapreduce(f, op, A::AbstractArray, neutral::Double32; kwargs...) -> Double32
 
-[`ak_mapreduce`](@ref) with `f = identity`. `eltype(A)` must equal
-`typeof(neutral)`.
+Parallel reduction of `op(f(A[1]), f(A[2]), …)` on whatever backend owns `A`,
+returning a host scalar. Wrapper over `AcceleratedKernels.mapreduce`.
+
+`neutral` must be the identity of `op` and **fixes the accumulator type**. It
+is positional rather than a keyword because AK's own default,
+`neutral_element(op, eltype(src))`, is the wrong type for this package's
+headline pattern: reducing a `Vector{Float32}` into a `Double32` accumulator
+needs `zero(Double32)`, not `zero(Float32)`. Requiring it makes the accumulator
+type impossible to get wrong — the same rule design section 14.4 states as
+advice, expressed as a signature. It is also **not** `Base`'s `init`: AK seeds
+every block with it, so a non-identity value would be added once per block.
+
+**Determinism.** For a fixed `block_size` and length the tree shape is fixed, so
+the result is reproducible across runs *and across backends* — a CPU and a CUDA
+reduction of the same array return the same bits, which the test suite asserts.
+It is **not** the same answer as `Base`'s pairwise tree; `Double32` addition is
+not associative, so those differ in the last places. Neither is wrong; only one
+is reproducible.
+
+Extra keywords pass through to `AcceleratedKernels.mapreduce` — `block_size`,
+`temp`, `switch_below`, `dims`.
+
+The backend is always `KernelAbstractions.get_backend(A)` — the backend that
+owns the memory is the only one that can run the kernel, so it is derived,
+never a parameter.
 """
-ak_reduce(op, A::AbstractArray, neutral; kwargs...) =
-    ak_mapreduce(identity, op, A, neutral; kwargs...)
+Base.mapreduce(f, op, A::AbstractArray, neutral::Double32; kwargs...) =
+    _mapreduce_impl(f, op, A, neutral; kwargs...)
+
+# A Float32 accumulator over Double32 data (the norm2 scale pass is the
+# in-package example). Owned through the eltype; a Float32-over-Float32
+# method would pirate Base.
+Base.mapreduce(f, op, A::AbstractArray{Double32}, neutral::Float32; kwargs...) =
+    _mapreduce_impl(f, op, A, neutral; kwargs...)
 
 """
-    Double32s.ak_sum(A; policy = DEFAULT_POLICY, kwargs...) -> Double32
+    reduce(op, A::AbstractArray, neutral::Double32; kwargs...) -> Double32
 
-Parallel sum of `A` in `Double32`. `A` may hold `Double32` or `Float32` — a
-`Float32` element converts exactly and for free, so this is the
-accurate-accumulation pattern with a reproducible tree.
+[`mapreduce`](@ref mapreduce(::Any, ::Any, ::AbstractArray, ::Double32)) with
+`f = identity`. `eltype(A)` must equal `typeof(neutral)`.
+"""
+Base.reduce(op, A::AbstractArray, neutral::Double32; kwargs...) =
+    _mapreduce_impl(identity, op, A, neutral; kwargs...)
+
+"""
+    sum(Double32, A::DenseArray; policy = DEFAULT_POLICY, kwargs...) -> Double32
+    sum(A::AbstractArray{Double32}; policy = DEFAULT_POLICY, kwargs...) -> Double32
+
+Parallel sum in `Double32`, on whatever backend owns `A`.
+
+The first form is the accurate-accumulation pattern: `A` may hold `Float32` —
+an element converts exactly and for free — and the reduction tree is the
+reproducible AcceleratedKernels one. The second form routes every `sum` of
+`Double32` data through the same tree by dispatch.
 
 `policy` selects the addition kernel: `StrictPolicy()` (the default) gives the
 `3u²` bound of design section 8.1; `FastPolicy()` gives roughly `Float32`-level
 error per step for about 8 flops instead of 20.
 
-Measured on 50 M `Float32` on an RTX 5090: 0.439 ms against 0.417 ms for
-`sum(Double32, A)`, and 0.146 ms for a plain `Float32` `sum` — the ~3× is the
-arithmetic cost of 48-bit accumulation, not a launch artifact. Choose `ak_sum`
-for a reproducible tree or a non-default policy; `sum` for brevity.
+Measured on 50 M `Float32` on an RTX 5090: 0.439 ms against 0.146 ms for a
+plain `Float32` `sum` — the ~3× is the arithmetic cost of 48-bit accumulation,
+not a launch artifact.
+
+The first method is bounded at `DenseArray`, not `AbstractArray`, to stay
+unambiguous against packages that specialize `sum(f, a)` on their own array
+types (`StaticArrays` was the live collision:
+`typeintersect(StaticArray, DenseArray)` is `Union{}`, so the narrower bound
+removes the crossing). A view or wrapper falls back to `Base`'s generic
+`sum(Double32, A)` — same values, `Base`'s tree.
 
 # Examples
 ```jldoctest
-julia> Double32s.ak_sum(Float32[1, 2, 3, 4])
+julia> sum(Double32, Float32[1, 2, 3, 4])
 Double32(10.0f0, 0.0f0)
 ```
 """
-ak_sum(A::AbstractArray; policy::ArithmeticPolicy = DEFAULT_POLICY, kwargs...) =
-    ak_mapreduce(Double32, PolicyOp(add, policy), A, zero(Double32); kwargs...)
+Base.sum(::Type{Double32}, A::DenseArray;
+         policy::ArithmeticPolicy = DEFAULT_POLICY, kwargs...) =
+    _mapreduce_impl(Double32, PolicyOp(add, policy), A, zero(Double32); kwargs...)
+
+Base.sum(A::AbstractArray{Double32};
+         policy::ArithmeticPolicy = DEFAULT_POLICY, kwargs...) =
+    _mapreduce_impl(identity, PolicyOp(add, policy), A, zero(Double32); kwargs...)
 
 # ------------------------------------------------------------------- dot ---
 
 """
     Double32s.ExactProduct()
 
-Elementwise product for [`Double32s.ak_dot`](@ref). On `Float32` operands it
-returns the **exact** product as a canonical `Double32` — `two_prod_` gives
-`(p, e)` with `|e| ≤ ½ulp(p)`, which is the canonical invariant, so `raw` is
-justified and no normalization runs. A singleton, so it costs no kernel
-argument.
+Elementwise product for the `Double32` [`dot`](@ref) methods. On `Float32`
+operands it returns the **exact** product as a canonical `Double32` —
+`two_prod_` gives `(p, e)` with `|e| ≤ ½ulp(p)`, which is the canonical
+invariant, so `raw` is justified and no normalization runs. A singleton, so it
+costs no kernel argument.
 """
 struct ExactProduct end
 
@@ -114,10 +147,11 @@ end
 @inline (::ExactProduct)(a::Double32, b::Double32) = a * b
 @inline (p::ExactProduct)(a, b) = p(convert(Double32, a), convert(Double32, b))
 
-# `ak_mapreduce` reduces one array; a dot product needs two. Reducing over an
-# index array and reading both inside `f` keeps a single reduction
-# implementation instead of a second hand-written kernel. The index array lives
-# on the same backend as the data, so nothing touches host memory.
+# The reduction core takes one array; a dot product needs two. Reducing over an
+# index *range* and reading both inside `f` keeps a single reduction
+# implementation instead of a second hand-written kernel, and the range is
+# isbits — indices are computed in registers, so the reduction's memory
+# traffic is exactly x and y.
 struct ZipProduct{X,Y} <: Function
     x::X
     y::Y
@@ -125,36 +159,45 @@ end
 @inline (z::ZipProduct)(i::Integer) = @inbounds ExactProduct()(z.x[i], z.y[i])
 
 """
-    Double32s.ak_dot(x, y; policy = DEFAULT_POLICY, kwargs...) -> Double32
+    LinearAlgebra.dot(Double32, x, y; policy = DEFAULT_POLICY, kwargs...) -> Double32
 
-Dot product accumulated in `Double32`.
+Dot product accumulated in `Double32`, for inputs of **any** element type, on
+whatever backend owns `x`. The first argument is the accumulator type, exactly
+as in `sum(Double32, A)` — a `dot(::Vector{Float32}, ::Vector{Float32})` method
+returning `Double32` would change the meaning of every existing `Float32` dot,
+so the widening must be asked for.
 
 When `x` and `y` hold `Float32`, **each product is formed exactly** as a
 `Double32` by [`EFT.two_prod_`](@ref) before it is accumulated, so nothing is
 lost before the summation itself — strictly better than rounding each product to
-`Float32` first, and better than any `Float32` `dot`. This is the device
+`Float32` first, and better than any `Float32` `dot`. This is the parallel
 counterpart of [`Double32s.compensated_dot`](@ref), which is sequential and host
 only.
 
-It is also the faster spelling: on 50 M `Float32` pairs on an RTX 5090 it beats
-`sum(x .* y)` by about 1.5×, because the fused reduction never materializes the
-product array that the broadcast form writes and reads back.
+It is also the faster spelling on device: on 50 M `Float32` pairs on an RTX
+5090 it beats `sum(x .* y)` by 1.5× (0.418 ms against 0.630 on 50 M pairs), because the fused reduction never
+materializes the product array that the broadcast form writes and reads back.
 
 Products below `2⁻¹⁰¹` lose their residual to subnormal underflow; see
 [`EFT.two_prod_`](@ref) and gate on
 [`Double32s.has_gradual_underflow`](@ref).
 """
-function ak_dot(x::AbstractArray, y::AbstractArray;
-                policy::ArithmeticPolicy = DEFAULT_POLICY, kwargs...)
+function LinearAlgebra.dot(::Type{Double32}, x::AbstractArray, y::AbstractArray;
+                           policy::ArithmeticPolicy = DEFAULT_POLICY, kwargs...)
     axes(x) == axes(y) || throw(DimensionMismatch(
         lazy"x has axes $(axes(x)) but y has axes $(axes(y))"))
     isempty(x) && return zero(Double32)
-    # The index array must live where the data lives; the reduction then
-    # derives the same backend from it.
-    idx = KA.allocate(KA.get_backend(x), Int32, length(x))
-    copyto!(idx, Int32.(1:length(x)))
-    return ak_mapreduce(ZipProduct(x, y), PolicyOp(add, policy), idx,
-                        zero(Double32); kwargs...)
+    # Reduce over an index *range*, not an index array: a range is isbits, so
+    # the kernel computes indices in registers and the reduction's memory
+    # traffic is exactly x and y. The first implementation allocated an Int32
+    # index array and filled it from the host — measured 53.8 ms for a 50 M
+    # dot on an RTX 5090, all of it the host-side iota and its bus transfer.
+    # The backend must be passed explicitly here: derived from the range it
+    # would be CPU regardless of where x lives.
+    z = zero(Double32)
+    return AK.mapreduce(ZipProduct(x, y), PolicyOp(add, policy),
+                        Int32(1):Int32(length(x)), KA.get_backend(x);
+                        init = z, neutral = z, kwargs...)
 end
 
 # ----------------------------------------------------------------- norm2 ---
@@ -177,24 +220,26 @@ end
 end
 
 """
-    Double32s.ak_norm2(x; kwargs...) -> Double32
+    Double32s.norm2(x; kwargs...) -> Double32
 
 Euclidean norm on whatever backend owns `x`, with an exact power-of-two
-prescaling so the squares neither overflow nor underflow.
+prescaling so the squares neither overflow nor underflow. Accepts `Float32` or
+`Double32` elements. (`LinearAlgebra` has no `norm2` generic to extend, so the
+name is package-local.)
 
 The scale is `2^-k` with `k` taken from the largest `|x[i]|`, which costs one
 extra reduction pass to find. Scaling by a power of two is exact, so the only
 error is the summation and the final `sqrt`.
 """
-function ak_norm2(x::AbstractArray; policy::ArithmeticPolicy = DEFAULT_POLICY,
-                  kwargs...)
+function norm2(x::AbstractArray; policy::ArithmeticPolicy = DEFAULT_POLICY,
+               kwargs...)
     isempty(x) && return zero(Double32)
-    m = ak_mapreduce(LeadMagnitude(), max, x, 0.0f0; kwargs...)
+    m = _mapreduce_impl(LeadMagnitude(), max, x, 0.0f0; kwargs...)
     iszero(m) && return zero(Double32)
     isfinite(m) || return Double32(m)              # Inf or NaN propagates
     k = raw_exponent(m)
     scale = ldexp(1.0f0, -k)
-    ss = ak_mapreduce(ScaledSquare(scale), PolicyOp(add, policy), x,
-                      zero(Double32); kwargs...)
+    ss = _mapreduce_impl(ScaledSquare(scale), PolicyOp(add, policy), x,
+                         zero(Double32); kwargs...)
     return ldexp(sqrt_or_nan(ss), k)
 end

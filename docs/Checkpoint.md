@@ -1476,8 +1476,8 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
 | scalar core | `+ - * /`, `inv`, `sqrt`, `fma`/`muladd`, comparisons, conversions, promotion | done; every device-safe op 0 throw refs, 0 alloc, no `double` in LLVM |
 | elementary | `cbrt`, `rsqrt`; `exp` `expm1` `exp2` `exp10`; `log` `log_or_nan` `log1p` `log2` `log10`; `sin` `cos` `sincos` `tan` (NaN past `TRIG_ARG_LIMIT = 2^20`); `atan(±)` `asin` `acos`; `sinh` `cosh` `tanh` `asinh` `acosh` `atanh`; `^` (Integer and Double32) | done; **rebuilt 2026-07-29** (design §20.6): table reductions, dominant-add Horner (`src/math/horner.jl`), Float32 tails — 2–7× per function, `log`/`atanh` division-free; ulp48 tables in `accuracy_report.md`, ceilings in `test/core/elementary.jl` |
 | coefficients | `scripts/gen_coefficients.jl` → `src/math/coefficients.jl`, 400-bit BigFloat, `reinterpret` bit patterns only | regenerate with `julia scripts/gen_coefficients.jl` |
-| parallel | `ak_sum` `ak_dot` `ak_norm2` `ak_reduce` `ak_mapreduce` `ak_map!` on AcceleratedKernels; capability probe via `AK.foreachindex` | done; reproducible per backend, **not** across backends |
-| matmul + linear algebra | device `ak_matmul!`/`ak_matmul` (split-channel tiled kernel, both element types, cross-backend bit-identical); host `LinearAlgebra.mul!` for `A*B`, `A*x`, `A'x`, `A'B`, `AB'` and `LinearAlgebra.dot` — all split-channel | done; 0.33/0.42 ms at 1024³ device; host speedups 21–62× over generic, verified against pre-change baselines |
+| parallel | `sum(Double32, A)`, `sum(::Array{Double32})`, `dot(Double32, x, y)`, `mapreduce`/`reduce` with a `Double32` neutral, `map!` into `Double32` dest — all AcceleratedKernels-backed Base/LinearAlgebra methods (ak_ prefix removed 2026-07-29); `norm2` package-local; capability probe via `AK.foreachindex` | done; reproducible per backend, **not** across backends |
+| matmul + linear algebra | device `matmul!`/`matmul` (split-channel tiled kernel, both element types, cross-backend bit-identical); host `LinearAlgebra.mul!` for `A*B`, `A*x`, `A'x`, `A'B`, `AB'` and `LinearAlgebra.dot` (backend-branching: host split-channel, device AK) | done; 0.33/0.42 ms at 1024³ device; host speedups 21–62× over generic, verified against pre-change baselines |
 | arrays | `SplitDouble32Array`, `split`/`unsplit`(+`!`), `allocate_split`, Adapt through both words | done |
 | probes | 6-lane capability probe (FTZ vs unfused-fma separated), `capability_report`, `kernel_report` (CUDA), `launch_config`, `wavefront_size` | done; AMD `kernel_report` deliberately absent (no VGPR API) |
 
@@ -1497,7 +1497,7 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
   172.7→43.8, log 145.0→41.0, sin 194.9→39.2, sinh 345.4→49.5, cosh
   350.4→49.0, atan 172.8→60.0; accuracy ceilings all hold, expm1 4.63→1.66,
   tanh 3.50→1.52, atanh 2.42→1.30 ulp48
-- reductions: `ak_sum` 50M F32 ≈0.44 ms; `ak_dot` 1.5× faster than `sum(x.*y)`
+- reductions: `sum(Double32, A)` 50M F32 ≈0.44 ms; `dot(Double32, x, y)` 1.5× faster than `sum(x.*y)`
   and exact in products
 - matmul 1024³: F32→D32 0.33 ms, D32×D32 0.42 ms, cuBLAS SGEMM 0.048 ms,
   error ~1e-13 normwise vs ~6e-7 for F32 BLAS
@@ -1526,7 +1526,7 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
 - `Double32sBFloat16sExt`, `Double32sDoubleFloatsExt` (§11.3 rule 4) unwritten
 - three-argument decimal `show` deferred (§11.5)
 - cross-backend bit-identical *reductions* withdrawn with the AK move (§19.6);
-  `ak_matmul` is the remaining cross-backend-reproducible routine
+  `matmul` is the remaining cross-backend-reproducible routine
 - `lu` and `\` still run the generic fallbacks — the rank-1 update rewrites
   each element as a canonical pair through the stored matrix, so the
   split-channel trick needs a compensated-LU algorithm (active submatrix held
@@ -1691,3 +1691,66 @@ old formula's 2.43 on the dense mid-band stress that matters).
 - Open: device throughput of the rebuilt functions unmeasured — dynamic table
   indexing compiles on GPU but may spill to local memory; recorded in §20.6.
 - Nothing committed.
+
+---
+
+## The ak_ prefix removed: Base and LinearAlgebra methods — 2026-07-29 01:35 EDT
+
+Requested: remove the `ak_` prefix; where the resulting name is a Base or
+LinearAlgebra function, extend that generic; clean up the docs.
+
+### The mapping, and the rule that made it safe
+
+Every method carries `Double32` in its signature — nothing is pirated, and no
+`Float32`-only call changes meaning:
+
+| was | is now |
+|---|---|
+| `ak_sum(A)` | `Base.sum(Double32, A::DenseArray)` and `Base.sum(A::AbstractArray{Double32})` |
+| `ak_dot(x, y)` | `LinearAlgebra.dot(Double32, x, y)`; `dot` on `Double32` vectors dispatches itself |
+| `ak_mapreduce(f, op, A, n)` | `Base.mapreduce(f, op, A, neutral::Double32)` (+ a `Float32`-neutral method over `Double32` data) |
+| `ak_reduce(op, A, n)` | `Base.reduce(op, A, neutral::Double32)` |
+| `ak_map!(f, d, …)` | `Base.map!(f, dest::AbstractArray{Double32}, …)`, arities 1–3 |
+| `ak_norm2` | `Double32s.norm2` (no generic exists) |
+| `ak_matmul!`/`ak_matmul` | `Double32s.matmul!`/`matmul` (no generic exists) |
+
+The old **host sequential** `norm2` collided and is now `compensated_norm2`,
+where it always belonged — it is built on `compensated_dot` and shares that
+family's sequential-order contract.
+
+### Two dispatch defects surfaced and fixed
+
+- **`sum(::Type{Double32}, ::AbstractArray)` was ambiguous against
+  StaticArrays'** `sum(f, ::StaticArray)` (the suite's zero-ambiguity gates
+  caught it, 4 failures). Bounded at `DenseArray`:
+  `typeintersect(StaticArray, DenseArray) === Union{}`, so the crossing is
+  gone; views fall back to Base's generic `sum(Double32, A)`.
+- **`dot(::AbstractVector{Double32}, …)` was ambiguous against SparseArrays'**
+  sparse `dot` methods — and the exercise exposed a latent defect: `CuVector`
+  **is** a `StridedVector`, so the host split-channel `dot` would have claimed
+  device arrays and scalar-indexed them. The method stays bounded at
+  `StridedVector{Double32}` (excludes sparse) and now branches on
+  `KernelAbstractions.get_backend` (separates device), which array-type
+  dispatch cannot do.
+
+### A third defect, found by reading the regenerated report
+
+`dot`'s device path measured **53.8 ms** on a 50 M dot (RTX 5090) — present
+since the AK move, invisible because nothing compared the row against its own
+docstring's 1.5×-faster-than-`sum(x .* y)` claim. Cause: the reduction's index
+array was materialized on the *host* (`copyto!(idx, Int32.(1:n))`) and shipped
+over the bus. Fix: reduce over an `Int32` **range** — isbits, indices computed
+in registers, memory traffic exactly `x` and `y`, backend passed explicitly
+since a range would derive `CPU()`. Measured after: **0.418 ms**, against
+0.630 for `sum(A .* B)` — the documented 1.5× is true again, and the numbers
+in the docstring and GPU guide now carry the remeasured values.
+
+### State
+
+- Suite green: **2,517,815 assertions** (one duplicate-spelling comparison
+  collapsed by the rename itself).
+- Docs build exit 0: api.md portable-layer section rewritten around the
+  generics; guides, examples, index updated; all three reports regenerated
+  with the new names (`gpu_report.jl` also gained the `LinearAlgebra` import
+  `dot` now needs).
+- Snapshot updated in place.

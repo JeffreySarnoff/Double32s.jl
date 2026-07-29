@@ -441,7 +441,7 @@ let
         println(io, "|:--------|---------------------:|")
         @printf(io, "| `Double32.(A) * Double32.(B)` (generic) | %.2e |\n", mm_d32)
         @printf(io, "| `A * B` (Float32, BLAS) | %.2e |\n", mm_f32)
-        println(io, "\nThe device-side tiled kernel `Double32s.ak_matmul`, which forms every")
+        println(io, "\nThe device-side tiled kernel `Double32s.matmul`, which forms every")
         println(io, "`Float32` product exactly with `two_prod_`, is measured in `gpu_report.md`.")
     end
     @info "appended reductions and matrix-multiply accuracy sections"

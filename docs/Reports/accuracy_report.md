@@ -51,7 +51,7 @@ Bounded against the operand scale `M = max(|x·y|, |z|)`, in units of `u²·M`,
 
 | comparison | n | Double32 error (ulp48) | naive error (ulp48) |
 |:-----------|--:|-----------------------:|--------------------:|
-| `sum(Double32, A)` vs `sum(::Vector{Float32})` | 100000 | 0.070 | 3614648.9 |
+| `sum(Double32, A)` vs `sum(::Vector{Float32})` | 100000 | 1.070 | 3614648.9 |
 | `compensated_dot(x, y)` vs Float32 `dot` | 50000 | 15.211 | 16244311.3 |
 | `norm2` (squares overflow Float32) | 10000 | 3.412 | Inf (Float32 overflows) |
 
@@ -131,8 +131,8 @@ more than 48 bits, and there the format's true error appears.
 |:-----|-------------------:|------------------:|----------------:|------------------:|
 | 1e8 then 1e5 ones | 0.00e+00 | 0.00e+00 | 4.00e-07 | 0.00e+00 |
 | 1/k, k = 1..1e5 | 0.00e+00 | 0.00e+00 | 1.47e-07 | 0.00e+00 |
-| randn, 1e5 | 0.00e+00 | 2.29e-15 | 1.61e-07 | 0.00e+00 |
-| randn x 2^(-60..60), 1e5 | 1.16e-14 | 3.07e-14 | 1.92e-08 | 1.20e-16 |
+| randn, 1e5 | 2.29e-15 | 2.29e-15 | 1.61e-07 | 0.00e+00 |
+| randn x 2^(-60..60), 1e5 | 3.07e-14 | 3.07e-14 | 1.92e-08 | 1.20e-16 |
 
 ### Dot product and norm (50 000 elements)
 
@@ -157,5 +157,5 @@ not a real result.
 | `Double32.(A) * Double32.(B)` (generic) | 1.83e-14 |
 | `A * B` (Float32, BLAS) | 3.94e-07 |
 
-The device-side tiled kernel `Double32s.ak_matmul`, which forms every
+The device-side tiled kernel `Double32s.matmul`, which forms every
 `Float32` product exactly with `two_prod_`, is measured in `gpu_report.md`.

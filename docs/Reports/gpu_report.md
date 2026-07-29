@@ -47,14 +47,14 @@ regresses either one fails rather than being noticed here later.
 - used: **256** threads
 - CUDA `launch_configuration` suggests: **768** threads
 
-Measured `ak_sum` over 50 M `Float32`, at several block sizes:
+Measured `sum(Double32, A)` over 50 M `Float32`, at several block sizes:
 
 | block size | time |
 |----------:|-----:|
-| 128 | 0.422 ms |
-| 256 | 0.404 ms |
-| 512 | 0.410 ms |
-| 1024 | 0.359 ms |
+| 128 | 0.416 ms |
+| 256 | 0.405 ms |
+| 512 | 0.423 ms |
+| 1024 | 0.350 ms |
 
 The occupancy heuristic maximizes resident warps to hide memory
 latency. These reductions are arithmetic bound on `Double32` addition,
@@ -67,16 +67,16 @@ so extra resident warps buy little. The reduction itself is
 
 | call | time |
 |:-----|-----:|
-| `ak_sum(A::CuArray{Float32})` | 0.409 ms |
-| `sum(Double32, A)` | 0.441 ms |
-| `ak_sum(A::CuArray{Double32})` | 0.418 ms |
-| `sum(A::CuArray{Double32})` | 0.438 ms |
-| `sum(A::CuArray{Float32})` | 0.150 ms |
-| `ak_dot(A, B)` | 53.845 ms |
-| `sum(A .* B)` | 0.638 ms |
-| `ak_norm2(A)` | 1.173 ms |
-| `ak_map!(x->x*x, D, Ad)` | 0.566 ms |
-| `D .= Ad .* Ad` | 0.568 ms |
+| `sum(Double32, A::CuArray{Float32})` | 0.397 ms |
+| `sum(Double32, A)` | 0.397 ms |
+| `sum(A::CuArray{Double32})` | 0.403 ms |
+| `sum(A::CuArray{Double32})` | 0.433 ms |
+| `sum(A::CuArray{Float32})` | 0.152 ms |
+| `dot(Double32, A, B)` | 0.418 ms |
+| `sum(A .* B)` | 0.630 ms |
+| `norm2(A)` | 1.159 ms |
+| `map!(x->x*x, D, Ad)` | 0.553 ms |
+| `D .= Ad .* Ad` | 0.555 ms |
 
 ## Tiled matrix multiply (design 19.5)
 
@@ -90,9 +90,9 @@ accuracy.
 
 | size | F32→D32 | D32×D32 | `Float32` `*` | D32 rel err | F32 rel err |
 |-----:|--------:|--------:|--------------:|------------:|------------:|
-| 256³ | 0.02 ms | 0.02 ms | 0.015 ms | 8.42e-14 | 8.20e-07 |
-| 512³ | 0.06 ms | 0.07 ms | 0.038 ms | 1.18e-13 | 6.61e-07 |
-| 1024³ | 0.34 ms | 0.44 ms | 0.053 ms | 2.00e-13 | 5.79e-07 |
+| 256³ | 0.02 ms | 0.02 ms | 0.015 ms | 8.66e-14 | 8.69e-07 |
+| 512³ | 0.05 ms | 0.07 ms | 0.017 ms | 1.29e-13 | 7.28e-07 |
+| 1024³ | 0.36 ms | 0.43 ms | 0.053 ms | 1.68e-13 | 5.99e-07 |
 
 The accuracy column is the reason to use it: `Float32` data
 multiplied in `Float32` loses about seven digits, the same data
@@ -123,7 +123,7 @@ workgroup size — still not material.
 The direct kernel's apparent 8% edge turned out to be an artifact:
 the KA driver was calling `synchronize` after *every* reduction pass.
 Successive launches on one backend are queue-ordered, so those syncs
-were unnecessary. Removing them took `ak_sum` from 0.444 ms to
+were unnecessary. Removing them took `sum(Double32, A)` from 0.444 ms to
 0.414 ms and closed the gap to 1.5%. The fix is portable — every
 backend gets it — which is strictly better than a vendor-specific
 duplicate of the same algorithm.

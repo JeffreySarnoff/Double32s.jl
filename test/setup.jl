@@ -11,7 +11,7 @@ using Double32s
 using Double32s: raw, words, canonicalize, iscanonical, reference,
                  float64_reference_is_exact, lsb_exponent, is_power_of_two,
                  sqrt_or_nan, compensated_dot, compensated_sum,
-                 compensated_mapreduce, norm2, split, unsplit,
+                 compensated_mapreduce, norm2, compensated_norm2, split, unsplit,
                  SplitDouble32Array, StrictPolicy, FastPolicy, NativePolicy,
                  DEFAULT_POLICY, nominal_eps, unit_roundoff, isnormal,
                  has_gradual_underflow,

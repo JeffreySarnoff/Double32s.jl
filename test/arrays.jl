@@ -66,16 +66,16 @@
         @test iszero(compensated_sum(Float32[]))
     end
 
-    @testset "norm2 scales exactly" begin
-        @test norm2(Double32[3, 4]) === Double32(5)
-        @test iszero(norm2(Double32[]))
-        @test iszero(norm2(Double32[0, 0]))
+    @testset "compensated_norm2 scales exactly" begin
+        @test compensated_norm2(Double32[3, 4]) === Double32(5)
+        @test iszero(compensated_norm2(Double32[]))
+        @test iszero(compensated_norm2(Double32[0, 0]))
         # no premature overflow or underflow, which is the whole point
-        @test isfinite(norm2(Double32[Double32(1f30), Double32(1f30)]))
-        @test !iszero(norm2(Double32[Double32(1f-30), Double32(1f-30)]))
-        @test isnan(norm2(Double32[one(Double32), D32_NAN]))
-        @test isinf(norm2(Double32[one(Double32), POS_INF]))
+        @test isfinite(compensated_norm2(Double32[Double32(1f30), Double32(1f30)]))
+        @test !iszero(compensated_norm2(Double32[Double32(1f-30), Double32(1f-30)]))
+        @test isnan(compensated_norm2(Double32[one(Double32), D32_NAN]))
+        @test isinf(compensated_norm2(Double32[one(Double32), POS_INF]))
         v = Double32[1, 2, 3, 4]
-        @test relerr(norm2(v), sqrt(big(30))) <= 8.0 * U2
+        @test relerr(compensated_norm2(v), sqrt(big(30))) <= 8.0 * U2
     end
 end

@@ -30,7 +30,7 @@
 """
     Double32s.MATMUL_BLOCK
 
-Blocking factor for [`Double32s.ak_matmul!`](@ref): **`1`**.
+Blocking factor for [`Double32s.matmul!`](@ref): **`1`**.
 
 Each work item computes a `MATMUL_BLOCK × MATMUL_BLOCK` sub-block of `C`, so
 `MATMUL_BLOCK > 1` reuses each staged value that many times — the textbook fix
@@ -184,7 +184,7 @@ _tile_eltype(::AbstractMatrix{Double32}) = Double32
 _tile_eltype(::AbstractMatrix) = Double32
 
 """
-    Double32s.ak_matmul!(C, A, B; kwargs...) -> C
+    Double32s.matmul!(C, A, B; kwargs...) -> C
 
 Tiled matrix multiply with `Double32` accumulation, on any
 `KernelAbstractions` backend. Design section 19.5.
@@ -240,7 +240,7 @@ algorithm, and it is both faster than the `StrictPolicy` pair chain and holds
 its measured error. A knob that selected a slower, equally-accurate path would
 be surface area without a decision behind it.
 """
-function ak_matmul!(C::AbstractMatrix{Double32},
+function matmul!(C::AbstractMatrix{Double32},
                     A::AbstractMatrix, B::AbstractMatrix;
                     tile::Int = MATMUL_TILE,
                     block::Int = MATMUL_BLOCK)
@@ -277,22 +277,22 @@ function _matmul_impl(C, A, B, M, N, K, backend,
 end
 
 """
-    Double32s.ak_matmul(A, B; kwargs...) -> AbstractMatrix{Double32}
+    Double32s.matmul(A, B; kwargs...) -> AbstractMatrix{Double32}
 
-Allocating form of [`Double32s.ak_matmul!`](@ref).
+Allocating form of [`Double32s.matmul!`](@ref).
 
 # Examples
 ```jldoctest
 julia> A = Float32[1 2; 3 4]; B = Float32[5 6; 7 8];
 
-julia> Float64.(Double32s.ak_matmul(A, B))
+julia> Float64.(Double32s.matmul(A, B))
 2×2 Matrix{Float64}:
  19.0  22.0
  43.0  50.0
 ```
 """
-function ak_matmul(A::AbstractMatrix, B::AbstractMatrix; kwargs...)
+function matmul(A::AbstractMatrix, B::AbstractMatrix; kwargs...)
     C = KA.allocate(KA.get_backend(A), Double32, size(A, 1), size(B, 2))
     fill!(C, zero(Double32))
-    return ak_matmul!(C, A, B; kwargs...)
+    return matmul!(C, A, B; kwargs...)
 end

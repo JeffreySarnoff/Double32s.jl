@@ -13,8 +13,8 @@ instead".
 This report covers the whole implemented surface — scalar arithmetic,
 elementary functions, trigonometry, hyperbolics, reductions, and dense linear
 algebra.  **GPU timings are not here**: `KernelAbstractions` and `CUDA` are weak
-dependencies that the root project cannot load, so `ak_sum`, `ak_dot`,
-`ak_norm2`, and `ak_matmul` are measured by `docs/Reports/gpu_report.jl`, which
+dependencies that the root project cannot load, so `sum(Double32, A)`, `dot(Double32, x, y)`,
+`norm2`, and `matmul` are measured by `docs/Reports/gpu_report.jl`, which
 has its own environment.
 
 Timings are best-of-trials amortized averages on the machine that ran the
@@ -28,8 +28,8 @@ script — indicative magnitudes, not precise measurements.
 | `-` | 3 ns | 0 ns | 9.1x |
 | `*` | 2 ns | 0 ns | 5.4x |
 | `/` | 7 ns | 1 ns | 9.3x |
-| `sqrt` | 12 ns | 1 ns | 11.8x |
-| `inv` | 7 ns | 1 ns | 9.4x |
+| `sqrt` | 12 ns | 1 ns | 11.7x |
+| `inv` | 7 ns | 1 ns | 9.5x |
 | `abs` | 1 ns | 0 ns | 2.3x |
 | `fma` | 6 ns | 0 ns | 18.5x |
 | `hypot` | 45 ns | 2 ns | 18.1x |
@@ -54,14 +54,14 @@ Measured accuracy for every function is in `accuracy_report.md`.
 |:----------|---------:|--------:|--------:|
 | `cbrt` | 63 ns | 3 ns | 18.4x |
 | `rsqrt` | 26 ns | 2 ns | 15.0x |
-| `exp` | 29 ns | 2 ns | 17.1x |
-| `expm1` | 38 ns | 2 ns | 16.8x |
+| `exp` | 29 ns | 2 ns | 17.0x |
+| `expm1` | 38 ns | 2 ns | 16.5x |
 | `exp2` | 25 ns | 2 ns | 15.0x |
-| `exp10` | 32 ns | 2 ns | 18.6x |
-| `log` | 37 ns | 3 ns | 11.5x |
-| `log1p` | 40 ns | 3 ns | 12.1x |
+| `exp10` | 32 ns | 2 ns | 18.9x |
+| `log` | 38 ns | 3 ns | 12.1x |
+| `log1p` | 40 ns | 3 ns | 12.3x |
 | `log2` | 31 ns | 3 ns | 9.5x |
-| `log10` | 35 ns | 3 ns | 10.3x |
+| `log10` | 35 ns | 3 ns | 11.1x |
 
 ## Trigonometric Functions
 
@@ -72,14 +72,14 @@ Measured accuracy for every function is in `accuracy_report.md`.
 
 | operation | Double32 | Float64 | D32/F64 |
 |:----------|---------:|--------:|--------:|
-| `sin` | 31 ns | 3 ns | 11.6x |
-| `cos` | 30 ns | 3 ns | 10.8x |
-| `sincos` | 35 ns | 3 ns | 10.6x |
+| `sin` | 31 ns | 3 ns | 10.5x |
+| `cos` | 31 ns | 3 ns | 10.8x |
+| `sincos` | 35 ns | 3 ns | 10.7x |
 | `tan` | 62 ns | 4 ns | 15.5x |
 | `asin` | 93 ns | 2 ns | 43.8x |
-| `acos` | 105 ns | 2 ns | 52.8x |
-| `atan` | 59 ns | 3 ns | 17.7x |
-| `atan2` | 72 ns | 6 ns | 11.4x |
+| `acos` | 105 ns | 2 ns | 52.7x |
+| `atan` | 59 ns | 3 ns | 17.6x |
+| `atan2` | 72 ns | 6 ns | 11.2x |
 
 ## Hyperbolic Functions
 
@@ -89,26 +89,26 @@ this package's `/` cannot avoid.
 
 | operation | Double32 | Float64 | D32/F64 |
 |:----------|---------:|--------:|--------:|
-| `sinh` | 36 ns | 3 ns | 14.0x |
-| `cosh` | 35 ns | 2 ns | 14.4x |
+| `sinh` | 37 ns | 3 ns | 14.1x |
+| `cosh` | 35 ns | 2 ns | 15.3x |
 | `tanh` | 62 ns | 3 ns | 21.0x |
 | `tanh (series band)` | 21 ns | 2 ns | 12.4x |
-| `asinh` | 70 ns | 7 ns | 9.5x |
-| `acosh` | 85 ns | 12 ns | 6.9x |
-| `atanh` | 75 ns | 5 ns | 14.3x |
+| `asinh` | 70 ns | 7 ns | 9.4x |
+| `acosh` | 85 ns | 6 ns | 13.9x |
+| `atanh` | 75 ns | 5 ns | 14.6x |
 
 ## Reductions (10000-element vectors)
 
 | operation | time | baseline | ratio |
 |:----------|-----:|:---------|------:|
-| `sum(Double32, A::Vector{Float32})` | 72.30 µs | `sum(Float64, A)` 915 ns | 79.0x |
-| `sum(::Vector{Double32})` | 71.38 µs | `sum(::Vector{Float64})` 745 ns | 95.8x |
-| `compensated_dot(::Vector{Float32}, ...)` | 71.29 µs | `dot` (BLAS, Float32) 646 ns | 110.4x |
-| `compensated_dot(::Vector{Double32}, ...)` | 71.72 µs | `dot` (BLAS, Float64) 984 ns | 72.9x |
-| `compensated_sum(::Vector{Double32})` | 69.91 µs | `sum(::Vector{Double32})` 71.38 µs | 1.0x |
-| `compensated_sum(::Vector{Float32})` | 70.31 µs | `sum(Float64, A)` 915 ns | 76.8x |
-| `norm2(::Vector{Double32})` | 108.13 µs | `norm` (BLAS, Float64) 1.86 µs | 58.0x |
-| `compensated_mapreduce(abs2, ::Vector{Double32})` | 70.70 µs | `sum(abs2, ::Vector{Float64})` 983 ns | 66.2x |
+| `sum(Double32, A::Vector{Float32})` | 70.60 µs | `sum(Float64, A)` 917 ns | 77.0x |
+| `sum(::Vector{Double32})` | 69.91 µs | `sum(::Vector{Float64})` 741 ns | 94.4x |
+| `compensated_dot(::Vector{Float32}, ...)` | 71.38 µs | `dot` (BLAS, Float32) 639 ns | 111.7x |
+| `compensated_dot(::Vector{Double32}, ...)` | 71.89 µs | `dot` (BLAS, Float64) 985 ns | 73.0x |
+| `compensated_sum(::Vector{Double32})` | 69.90 µs | `sum(::Vector{Double32})` 69.91 µs | 1.0x |
+| `compensated_sum(::Vector{Float32})` | 70.32 µs | `sum(Float64, A)` 917 ns | 76.6x |
+| `compensated_norm2(::Vector{Double32})` | 108.26 µs | `norm` (BLAS, Float64) 1.86 µs | 58.2x |
+| `compensated_mapreduce(abs2, ::Vector{Double32})` | 70.66 µs | `sum(abs2, ::Vector{Float64})` 982 ns | 66.5x |
 
 `sum(Double32, A::Vector{Float32})` is the package's headline use: a
 `Float32` data stream accumulated in ~48-bit precision through Base's own
@@ -123,25 +123,25 @@ kernel is measured in `gpu_report.md`.
 
 | operation | Double32 | Float64 | D32/F64 |
 |:----------|---------:|--------:|--------:|
-| `A * x   (n=32)` | 616 ns | 103 ns | 6.0x |
-| `A' * B  (n=32)` | 15.91 µs | 1.86 µs | 8.5x |
-| `A * B'  (n=32)` | 15.69 µs | 1.86 µs | 8.4x |
-| `dot(x,y) (n=10^4)` | 14.07 µs | 686 ns | 20.5x |
-| `lu(A)   (n=32)` | 60.43 µs | 3.82 µs | 15.8x |
-| `A \ b   (n=32)` | 58.99 µs | 4.22 µs | 14.0x |
+| `A * x   (n=32)` | 616 ns | 102 ns | 6.0x |
+| `A' * B  (n=32)` | 15.90 µs | 1.97 µs | 8.1x |
+| `A * B'  (n=32)` | 15.63 µs | 1.91 µs | 8.2x |
+| `dot(x,y) (n=10^4)` | 14.07 µs | 680 ns | 20.7x |
+| `lu(A)   (n=32)` | 60.51 µs | 3.71 µs | 16.3x |
+| `A \ b   (n=32)` | 58.98 µs | 4.19 µs | 14.1x |
 
 ### Matrix multiply
 
 | operation | Double32 | Float64 | D32/F64 |
 |:----------|---------:|--------:|--------:|
-| `A * B  (n=4)` | 244 ns | 89 ns | 2.8x |
-| `A * B  (n=8)` | 1.02 µs | 119 ns | 8.5x |
-| `A * B  (n=16)` | 4.26 µs | 401 ns | 10.6x |
-| `A * B  (n=32)` | 15.47 µs | 1.40 µs | 11.1x |
-| `A * B  (n=64)` | 86.57 µs | 8.73 µs | 9.9x |
+| `A * B  (n=4)` | 305 ns | 96 ns | 3.2x |
+| `A * B  (n=8)` | 1.02 µs | 128 ns | 8.0x |
+| `A * B  (n=16)` | 4.30 µs | 416 ns | 10.3x |
+| `A * B  (n=32)` | 15.42 µs | 1.40 µs | 11.0x |
+| `A * B  (n=64)` | 85.49 µs | 9.09 µs | 9.4x |
 
 The `Double32` column is Julia's generic `*`; `Float64` is BLAS.
-The device-side tiled kernel `Double32s.ak_matmul` with exact `Float32` products
+The device-side tiled kernel `Double32s.matmul` with exact `Float32` products
 is measured in `gpu_report.md`.
 
 ## Notes

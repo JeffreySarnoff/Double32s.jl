@@ -16,6 +16,7 @@
 #          at sizes that leave a partially-filled final workgroup.
 
 using KernelAbstractions
+using LinearAlgebra
 const KA = KernelAbstractions
 
 @testset "portable execution layer" begin
@@ -56,74 +57,74 @@ const KA = KernelAbstractions
         @test_throws DimensionMismatch Double32s.unsplit!(similar(A, 3), S)
     end
 
-    @testset "ak_map! matches broadcast on CPU()" begin
+    @testset "map! (AK) matches broadcast on CPU()" begin
         A = Double32.(Float32.(1:64)) ./ 3
         B = Double32.(Float32.(65:128)) ./ 7
         C = Double32.(Float32.(1:64))
 
         D = similar(A)
-        @test Double32s.ak_map!(x -> x * x, D, A) === D
+        @test map!(x -> x * x, D, A) === D
         @test all(D .=== A .* A)
 
-        @test all(Double32s.ak_map!(+, similar(A), A, B) .=== A .+ B)
-        @test all(Double32s.ak_map!(fma, similar(A), A, B, C) .=== fma.(A, B, C))
+        @test all(map!(+, similar(A), A, B) .=== A .+ B)
+        @test all(map!(fma, similar(A), A, B, C) .=== fma.(A, B, C))
 
-        @test_throws DimensionMismatch Double32s.ak_map!(identity, similar(A, 3), A)
-        @test Double32s.ak_map!(identity, Double32[], Double32[]) == Double32[]
+        @test_throws DimensionMismatch map!(identity, similar(A, 3), A)
+        @test map!(identity, Double32[], Double32[]) == Double32[]
     end
 
-    @testset "ak_sum on CPU(): accuracy and pass structure" begin
+    @testset "sum(Double32, A) on CPU(): accuracy and pass structure" begin
         # Sizes chosen to force 1, 2, and 3 passes at W = 256 (each pass eats
         # 512 elements per workgroup), plus sizes that leave the last workgroup
         # partly empty — the `i <= n` guards are the only thing protecting it.
         for n in (1, 2, 255, 256, 257, 511, 512, 513, 1_000, 262_144, 300_000)
             A = Float32.(1 ./ (1:n))
-            got = Double32s.ak_sum(A)
+            got = sum(Double32, A)
             want = sum(BigFloat.(Float64.(A)))
             @test Float64(abs(Double32s.reference(got) - want) / abs(want)) < 4e-15
             # Double32 input must give the same answer as Float32 input: the
             # conversion is exact, so only the accumulation can differ, and it
             # does not.
-            @test Double32s.ak_sum(Double32.(A)) === got
+            @test sum(Double32, Double32.(A)) === got
         end
-        @test Double32s.ak_sum(Float32[]) === zero(Double32)
+        @test sum(Double32, Float32[]) === zero(Double32)
 
         # The headline claim: a Double32 accumulator over hostile Float32 data.
         A = Float32[1f8; fill(1.0f0, 100_000)]
-        @test Float64(Double32s.ak_sum(A)) == 1.001e8
+        @test Float64(sum(Double32, A)) == 1.001e8
         @test Float32(sum(A)) != 1.001f8            # Float32 accumulator loses it
     end
 
-    @testset "ak_sum groupsize and policy" begin
+    @testset "sum groupsize and policy" begin
         A = Float32.(1 ./ (1:10_000))
         want = sum(BigFloat.(Float64.(A)))
         for W in (64, 128, 256, 512)
-            got = Double32s.ak_sum(A; block_size = W)
+            got = sum(Double32, A; block_size = W)
             @test Float64(abs(Double32s.reference(got) - want) / abs(want)) < 4e-15
         end
 
         for p in (StrictPolicy(), NativePolicy(), FastPolicy())
-            got = Double32s.ak_sum(A; policy = p)
+            got = sum(Double32, A; policy = p)
             @test Float64(abs(Double32s.reference(got) - want) / abs(want)) < 1e-6
         end
     end
 
-    @testset "ak_reduce and ak_mapreduce are generic in the accumulator" begin
+    @testset "reduce and mapreduce (AK neutral form) are generic in the accumulator" begin
         A = Double32.(Float32[3, 1, 4, 1, 5, 9, 2, 6])
-        @test Double32s.ak_reduce(+, A, zero(Double32)) === sum(A)
-        @test Double32s.ak_reduce(max, A, Double32(-Inf32)) === maximum(A)
-        @test Double32s.ak_reduce(min, A, Double32(Inf32)) === minimum(A)
+        @test reduce(+, A, zero(Double32)) === sum(A)
+        @test reduce(max, A, Double32(-Inf32)) === maximum(A)
+        @test reduce(min, A, Double32(Inf32)) === minimum(A)
         # A Float32 accumulator over Double32 data: `neutral` fixes the type.
-        @test Double32s.ak_mapreduce(x -> abs(x.hi), max, A, 0.0f0) === 9.0f0
-        @test Double32s.ak_mapreduce(Double32, +, Float32[], zero(Double32)) ===
+        @test mapreduce(x -> abs(x.hi), max, A, 0.0f0) === 9.0f0
+        @test mapreduce(Double32, +, Float32[], zero(Double32)) ===
               zero(Double32)
     end
 
-    @testset "ak_dot forms Float32 products exactly" begin
+    @testset "dot(Double32, x, y) forms Float32 products exactly" begin
         x = Float32.(1 ./ (1:5_000))
         y = Float32.(sqrt.(1:5_000))
         want = sum(BigFloat.(Float64.(x)) .* BigFloat.(Float64.(y)))
-        got = Double32s.ak_dot(x, y)
+        got = dot(Double32, x, y)
         @test Float64(abs(Double32s.reference(got) - want) / abs(want)) < 1e-13
         # Strictly better than rounding each product to Float32 first.
         naive = Float64(abs(big(sum(x .* y)) - want) / abs(want))
@@ -131,30 +132,30 @@ const KA = KernelAbstractions
 
         # A case where every product is exact, so the dot must be exact.
         u = Float32[1, 2, 3, 4]; v = Float32[4, 3, 2, 1]
-        @test Double32s.ak_dot(u, v) === Double32(20.0f0)
-        @test Double32s.ak_dot(Double32.(u), Double32.(v)) === Double32(20.0f0)
+        @test dot(Double32, u, v) === Double32(20.0f0)
+        @test dot(Double32, Double32.(u), Double32.(v)) === Double32(20.0f0)
 
-        @test_throws DimensionMismatch Double32s.ak_dot(x, y[1:10])
-        @test Double32s.ak_dot(Float32[], Float32[]) === zero(Double32)
+        @test_throws DimensionMismatch dot(Double32, x, y[1:10])
+        @test dot(Double32, Float32[], Float32[]) === zero(Double32)
     end
 
-    @testset "ak_norm2 scales exactly at both ends of the range" begin
+    @testset "norm2 scales exactly at both ends of the range" begin
         # Float32 squares would overflow, and would underflow, respectively.
         big_ = Float32[1f30, 1f30, 1f30]
         small = Float32[1f-30, 1f-30, 1f-30]
-        @test isfinite(Double32s.ak_norm2(big_))
-        @test Double32s.ak_norm2(big_) === Double32s.norm2(Double32.(big_))
-        @test !iszero(Double32s.ak_norm2(small))
-        @test Double32s.ak_norm2(small) === Double32s.norm2(Double32.(small))
+        @test isfinite(Double32s.norm2(big_))
+        @test Double32s.norm2(big_) === Double32s.norm2(Double32.(big_))
+        @test !iszero(Double32s.norm2(small))
+        @test Double32s.norm2(small) === Double32s.norm2(Double32.(small))
 
         v = Float32[3, 4]
-        @test Double32s.ak_norm2(v) === Double32(5.0f0)
-        @test Double32s.ak_norm2(Float32[]) === zero(Double32)
-        @test iszero(Double32s.ak_norm2(zeros(Float32, 8)))
-        @test !isfinite(Double32s.ak_norm2(Float32[1, Inf32]))
+        @test Double32s.norm2(v) === Double32(5.0f0)
+        @test Double32s.norm2(Float32[]) === zero(Double32)
+        @test iszero(Double32s.norm2(zeros(Float32, 8)))
+        @test !isfinite(Double32s.norm2(Float32[1, Inf32]))
     end
 
-    @testset "ak_matmul: exact products, tiled (Phase 5, design 19.5)" begin
+    @testset "matmul: exact products, tiled (Phase 5, design 19.5)" begin
         # Sizes chosen to exercise partial tiles in every dimension at the
         # default tile of 16: the out-of-range lanes must load zeros and still
         # reach both barriers.
@@ -162,7 +163,7 @@ const KA = KernelAbstractions
                           (33, 17, 65))
             A = rand(Float32, M, K)
             B = rand(Float32, K, N)
-            C = Double32s.ak_matmul(A, B)
+            C = Double32s.matmul(A, B)
             @test size(C) == (M, N)
             ref = Float64.(A) * Float64.(B)
             got = Float64.(C)
@@ -177,41 +178,41 @@ const KA = KernelAbstractions
         # answer must be exact too.
         A = Float32[1 2; 3 4]
         B = Float32[5 6; 7 8]
-        @test Float64.(Double32s.ak_matmul(A, B)) == Float64.(A) * Float64.(B)
-        @test all(iszero, Double32s.lo.(Double32s.ak_matmul(A, B)))
+        @test Float64.(Double32s.matmul(A, B)) == Float64.(A) * Float64.(B)
+        @test all(iszero, Double32s.lo.(Double32s.matmul(A, B)))
 
         # In-place form, and the tile size is a free parameter.
         C = Matrix{Double32}(undef, 2, 2)
-        @test Double32s.ak_matmul!(C, A, B) === C
+        @test Double32s.matmul!(C, A, B) === C
         for tile in (1, 2, 4, 8, 16, 32)
-            @test Float64.(Double32s.ak_matmul(A, B; tile)) == Float64.(A) * Float64.(B)
+            @test Float64.(Double32s.matmul(A, B; tile)) == Float64.(A) * Float64.(B)
         end
 
         # Empty dimensions are a no-op, not an error.
-        @test size(Double32s.ak_matmul(rand(Float32, 0, 3), rand(Float32, 3, 4))) == (0, 4)
+        @test size(Double32s.matmul(rand(Float32, 0, 3), rand(Float32, 3, 4))) == (0, 4)
 
-        @test_throws DimensionMismatch Double32s.ak_matmul(rand(Float32, 3, 4),
+        @test_throws DimensionMismatch Double32s.matmul(rand(Float32, 3, 4),
                                                            rand(Float32, 5, 6))
-        @test_throws DimensionMismatch Double32s.ak_matmul!(
+        @test_throws DimensionMismatch Double32s.matmul!(
             Matrix{Double32}(undef, 9, 9), A, B)
-        @test_throws ArgumentError Double32s.ak_matmul(A, B; tile = 3)
-        @test_throws ArgumentError Double32s.ak_matmul(A, B; tile = 0)
+        @test_throws ArgumentError Double32s.matmul(A, B; tile = 3)
+        @test_throws ArgumentError Double32s.matmul(A, B; tile = 0)
         # Double32 × Double32 is supported: the operands have already spent
         # their bits, so the products are the ordinary pair multiply rather than
         # the exact `two_prod_` used for Float32 operands.
-        @test Float64.(Double32s.ak_matmul(Double32.(A), Double32.(B))) ==
+        @test Float64.(Double32s.matmul(Double32.(A), Double32.(B))) ==
               Float64.(A) * Float64.(B)
         for (M, K, N) in ((32, 32, 32), (17, 33, 5), (64, 64, 64))
             X = rand(Float32, M, K); Y = rand(Float32, K, N)
             ref = Float64.(X) * Float64.(Y)
-            for got in (Double32s.ak_matmul(X, Y),
-                        Double32s.ak_matmul(Double32.(X), Double32.(Y)))
+            for got in (Double32s.matmul(X, Y),
+                        Double32s.matmul(Double32.(X), Double32.(Y)))
                 @test maximum(abs.((Float64.(got) .- ref) ./ abs.(ref))) < 1e-13
             end
         end
         # The square, block-aligned sizes above take the bounds-free kernel; the
         # ragged ones take the checked path. Both must be right.
-        @test_throws ArgumentError Double32s.ak_matmul(A, B; block = 3)
+        @test_throws ArgumentError Double32s.matmul(A, B; block = 3)
     end
 
     @testset "reproducibility modes (design 19.6)" begin
@@ -226,17 +227,16 @@ const KA = KernelAbstractions
         # size. Hostile data, because `1/k` sums exactly and would pass for any
         # tree at all.
         H = Float32.(randn(50_000))
-        first_run = Double32s.ak_sum(H; block_size = 256)
+        first_run = sum(Double32, H; block_size = 256)
         for _ in 1:5
-            @test Double32s.ak_sum(H; block_size = 256) === first_run
+            @test sum(Double32, H; block_size = 256) === first_run
         end
 
-        # tuned: Base's tree is free to differ, and generally does — but must
-        # still be accurate. This is the mode's contract, not an equality.
+        # Since the rename, `sum(Double32, A)` IS the AK path — there is no
+        # second spelling to compare against. The accuracy contract remains.
         want = sum(BigFloat.(Float64.(A)))
-        for got in (Double32s.ak_sum(A), sum(Double32, A))
-            @test Float64(abs(Double32s.reference(got) - want) / abs(want)) < 4e-15
-        end
+        got = sum(Double32, A)
+        @test Float64(abs(Double32s.reference(got) - want) / abs(want)) < 4e-15
     end
 
     # --- device --------------------------------------------------------------
@@ -252,31 +252,31 @@ const KA = KernelAbstractions
                 for n in (1, 257, 513, 100_000, 1_000_000)
                     A = Float32.(1 ./ (1:n))
                     want = sum(BigFloat.(Float64.(A)))
-                    for got in (Double32s.ak_sum(CuArray(A)),
-                                Double32s.ak_sum(CuArray(Double32.(A))))
+                    for got in (sum(Double32, CuArray(A)),
+                                sum(Double32, CuArray(Double32.(A))))
                         @test Float64(abs(Double32s.reference(got) - want) / abs(want)) < 1e-13
                     end
                 end
 
                 x = Float32.(1 ./ (1:20_000)); y = Float32.(sqrt.(1:20_000))
                 wantd = sum(BigFloat.(Float64.(x)) .* BigFloat.(Float64.(y)))
-                gotd = Double32s.ak_dot(CuArray(x), CuArray(y))
+                gotd = dot(Double32, CuArray(x), CuArray(y))
                 @test Float64(abs(Double32s.reference(gotd) - wantd) / abs(wantd)) < 1e-13
                 wantn = sqrt(sum(BigFloat.(Float64.(x)) .^ 2))
-                gotn = Double32s.ak_norm2(CuArray(x))
+                gotn = Double32s.norm2(CuArray(x))
                 @test Float64(abs(Double32s.reference(gotn) - wantn) / abs(wantn)) < 1e-13
 
                 # Repeatable on the device, which is what determinism means now.
                 dx = CuArray(Float32.(randn(200_000)))
-                first_dev = Double32s.ak_sum(dx)
+                first_dev = sum(Double32, dx)
                 for _ in 1:4
-                    @test Double32s.ak_sum(dx) === first_dev
+                    @test sum(Double32, dx) === first_dev
                 end
 
                 A = Double32.(Float32.(1:1024)) ./ 3
                 dA = CuArray(A)
                 D = similar(dA)
-                Double32s.ak_map!(x -> x * x, D, dA)
+                map!(x -> x * x, D, dA)
                 @test all(Array(D) .=== A .* A)
 
                 S = Double32s.allocate_split(CUDABackend(), length(A))
@@ -347,19 +347,19 @@ const KA = KernelAbstractions
             @test red.local_bytes <= 64
         end
 
-        @testset "CUDA: ak_matmul matches the CPU backend bit for bit" begin
+        @testset "CUDA: matmul matches the CPU backend bit for bit" begin
             for (M, K, N) in ((16, 16, 16), (17, 33, 5), (128, 96, 64))
                 A = rand(Float32, M, K)
                 B = rand(Float32, K, N)
-                host = Double32s.ak_matmul(A, B)
-                dev = Array(Double32s.ak_matmul(CuArray(A), CuArray(B)))
+                host = Double32s.matmul(A, B)
+                dev = Array(Double32s.matmul(CuArray(A), CuArray(B)))
                 @test all(dev .=== host)
             end
             # The tile loop fixes the summation order, so a different tile is
             # allowed to give a different answer — and the same tile must not.
             A = rand(Float32, 64, 64); B = rand(Float32, 64, 64)
-            @test all(Array(Double32s.ak_matmul(CuArray(A), CuArray(B); tile = 8)) .===
-                      Double32s.ak_matmul(A, B; tile = 8))
+            @test all(Array(Double32s.matmul(CuArray(A), CuArray(B); tile = 8)) .===
+                      Double32s.matmul(A, B; tile = 8))
         end
 
         @testset "deterministic fallback is available (Phase 3 gate)" begin
@@ -369,15 +369,15 @@ const KA = KernelAbstractions
             # repetition on hostile data — `1/k` sums exactly in Double32, so
             # using it here would make the test vacuous.
             A = CuArray(Float32.(randn(250_000)))
-            first_run = Double32s.ak_sum(A; block_size = 256)
+            first_run = sum(Double32, A; block_size = 256)
             for _ in 1:8
-                @test Double32s.ak_sum(A; block_size = 256) === first_run
+                @test sum(Double32, A; block_size = 256) === first_run
             end
-            # `ak_matmul` is a hand-written KernelAbstractions kernel with a
+            # `matmul` is a hand-written KernelAbstractions kernel with a
             # fixed tile loop, so it *is* still bit-identical across backends.
             M = rand(Float32, 48, 40); N2 = rand(Float32, 40, 32)
-            @test all(Array(Double32s.ak_matmul(CuArray(M), CuArray(N2))) .===
-                      Double32s.ak_matmul(M, N2))
+            @test all(Array(Double32s.matmul(CuArray(M), CuArray(N2))) .===
+                      Double32s.matmul(M, N2))
         end
     else
         @info "CUDA not functional; Phase 2/3 device tests skipped"

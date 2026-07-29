@@ -199,9 +199,9 @@ function reduction_rows()
     push!(rows, "| `compensated_sum(::Vector{Float32})` | $(fmt(t_csumf)) | " *
                 "`sum(Float64, A)` $(fmt(t_sumf64)) | $(ratio(t_csumf, t_sumf64))x |")
 
-    t_norm  = nsper(() -> Float64(Double32s.norm2(d32v)), 5)
+    t_norm  = nsper(() -> Float64(Double32s.compensated_norm2(d32v)), 5)
     t_norm64 = nsper(() -> norm(red64), 5)
-    push!(rows, "| `norm2(::Vector{Double32})` | $(fmt(t_norm)) | " *
+    push!(rows, "| `compensated_norm2(::Vector{Double32})` | $(fmt(t_norm)) | " *
                 "`norm` (BLAS, Float64) $(fmt(t_norm64)) | $(ratio(t_norm, t_norm64))x |")
 
     t_mapred = nsper(() -> Float64(Double32s.compensated_mapreduce(abs2, +, d32v)), 5)
@@ -272,8 +272,8 @@ instead".
 This report covers the whole implemented surface — scalar arithmetic,
 elementary functions, trigonometry, hyperbolics, reductions, and dense linear
 algebra.  **GPU timings are not here**: `KernelAbstractions` and `CUDA` are weak
-dependencies that the root project cannot load, so `ak_sum`, `ak_dot`,
-`ak_norm2`, and `ak_matmul` are measured by `docs/Reports/gpu_report.jl`, which
+dependencies that the root project cannot load, so `sum(Double32, A)`, `dot(Double32, x, y)`,
+`norm2`, and `matmul` are measured by `docs/Reports/gpu_report.jl`, which
 has its own environment.
 
 Timings are best-of-trials amortized averages on the machine that ran the
@@ -351,7 +351,7 @@ $(join(la_rows, "\n"))
 $(join(mm_rows, "\n"))
 
 The `Double32` column is Julia's generic `*`; `Float64` is BLAS.
-The device-side tiled kernel `Double32s.ak_matmul` with exact `Float32` products
+The device-side tiled kernel `Double32s.matmul` with exact `Float32` products
 is measured in `gpu_report.md`.
 
 ## Notes

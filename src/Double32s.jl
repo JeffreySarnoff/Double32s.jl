@@ -35,10 +35,10 @@ public allocate_split
 public POS_ZERO, NEG_ZERO, POS_INF, NEG_INF, D32_NAN
 public SplitDouble32Array, split, unsplit, split!, unsplit!, allocate_split_host
 public PolicyOp, DEFAULT_GROUPSIZE
-public ak_map!, ak_mapreduce, ak_reduce, ak_sum, ak_dot, ak_norm2
+public norm2
 public launch_config, kernel_report, wavefront_size
-public ak_matmul!, ak_matmul, MATMUL_TILE, MATMUL_BLOCK
-public compensated_dot, compensated_mapreduce, compensated_sum
+public matmul!, matmul, MATMUL_TILE, MATMUL_BLOCK
+public compensated_dot, compensated_mapreduce, compensated_sum, compensated_norm2
 public rsqrt, log_or_nan, TRIG_ARG_LIMIT
 public LN2, INV_LN2, LN10, LOG10_E, LN2_C2, PI_D32, PIO2_D32, PIO4_D32
 public LOG2_10, LOG10_2, LOG10_2_C2, LOG1P_COEFFS

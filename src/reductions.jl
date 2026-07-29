@@ -100,12 +100,14 @@ function compensated_mapreduce(f, op, A;
 end
 
 """
-    Double32s.norm2(x) -> Double32
+    Double32s.compensated_norm2(x) -> Double32
 
-Euclidean norm via [`compensated_dot`](@ref), with an exact power-of-two
-scaling so the squares neither overflow nor underflow prematurely.
+Euclidean norm via [`compensated_dot`](@ref) — sequential, host-ordered, like
+the rest of the `compensated_*` family — with an exact power-of-two scaling so
+the squares neither overflow nor underflow prematurely. The parallel,
+reproducible-tree counterpart is [`Double32s.norm2`](@ref).
 """
-function norm2(x::AbstractArray)
+function compensated_norm2(x::AbstractArray)
     isempty(x) && return zero(Double32)
     m = zero(Float32)
     @inbounds for a in x

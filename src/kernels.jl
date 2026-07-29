@@ -8,9 +8,11 @@
 #
 # What is deliberately *not* here: elementwise arithmetic. `dest .= f.(A, B)`
 # already compiles to one fused device kernel through GPUArrays and is the
-# recommended spelling. `ak_map!` exists for backends that have
-# KernelAbstractions but not GPUArrays broadcast, and for callers that need
-# explicit control of the workgroup size.
+# recommended spelling. The `Base.map!` methods below exist for backends that
+# have KernelAbstractions but not GPUArrays broadcast, and for callers that
+# need explicit control of the workgroup size. They dispatch on
+# `dest::AbstractArray{Double32}` — the owned type — so no `Float32`-only
+# `map!` changes meaning.
 
 """
     Double32s.DEFAULT_GROUPSIZE
@@ -30,7 +32,7 @@ Chosen, not inherited. It must be a power of two for the tree reduction, and
 - it is large enough to amortize the launch, and small enough that a short
   array still fills several workgroups.
 
-**Measured** on an RTX 5090, `ak_sum` over 50 M `Float32`:
+**Measured** on an RTX 5090, `sum(Double32, A)` over 50 M `Float32`:
 
 | W | 128 | **256** | 512 | 1024 |
 |---|---|---|---|---|
@@ -47,16 +49,17 @@ Override per call with the `groupsize` keyword when a measurement disagrees.
 const DEFAULT_GROUPSIZE = 256
 
 """
-    Double32s.ak_map!(f, dest, a)              -> dest
-    Double32s.ak_map!(f, dest, a, b)           -> dest
-    Double32s.ak_map!(f, dest, a, b, c)        -> dest
+    map!(f, dest::AbstractArray{Double32}, a)              -> dest
+    map!(f, dest::AbstractArray{Double32}, a, b)           -> dest
+    map!(f, dest::AbstractArray{Double32}, a, b, c)        -> dest
 
-Elementwise `dest[i] = f(a[i], …)` through `AcceleratedKernels.foreachindex`.
+Elementwise `dest[i] = f(a[i], …)` through `AcceleratedKernels.foreachindex`,
+on whatever backend owns `dest`.
 
 **Prefer broadcast.** `dest .= f.(a, b)` compiles to one fused device kernel
 through GPUArrays, handles mixed shapes and scalars, and is the spelling this
 package's documentation uses everywhere; measured on an RTX 5090 over 50 M
-elements the two are a tie. `ak_map!` exists for backends that provide
+elements the two are a tie. These methods exist for backends that provide
 `KernelAbstractions` but not GPUArrays broadcast, and for callers who want to
 pass AK's tuning keywords (`block_size`, `max_tasks`, `min_elems`) explicitly.
 
@@ -65,9 +68,12 @@ kernel would splat a tuple of device arrays inside the body, which is the
 construct most likely to defeat inference on a backend compiler, and these three
 cover every use in this package.
 
-All arrays must share `axes`, and `dest` must be distinct from the inputs.
+Stricter than `Base.map!` in one respect, on purpose: all arrays must share
+`axes` (`Base` silently stops at the shortest), and `dest` must be distinct
+from the inputs.
 """
-function ak_map!(f, dest::AbstractArray, a::AbstractArray; kwargs...)
+function Base.map!(f, dest::AbstractArray{Double32}, a::AbstractArray;
+                   kwargs...)
     _same_axes(dest, a)
     isempty(dest) && return dest
     AK.foreachindex(dest, KA.get_backend(dest); kwargs...) do i
@@ -76,8 +82,8 @@ function ak_map!(f, dest::AbstractArray, a::AbstractArray; kwargs...)
     return dest
 end
 
-function ak_map!(f, dest::AbstractArray, a::AbstractArray, b::AbstractArray;
-                 kwargs...)
+function Base.map!(f, dest::AbstractArray{Double32}, a::AbstractArray,
+                   b::AbstractArray; kwargs...)
     _same_axes(dest, a, b)
     isempty(dest) && return dest
     AK.foreachindex(dest, KA.get_backend(dest); kwargs...) do i
@@ -86,8 +92,8 @@ function ak_map!(f, dest::AbstractArray, a::AbstractArray, b::AbstractArray;
     return dest
 end
 
-function ak_map!(f, dest::AbstractArray, a::AbstractArray, b::AbstractArray,
-                 c::AbstractArray; kwargs...)
+function Base.map!(f, dest::AbstractArray{Double32}, a::AbstractArray,
+                   b::AbstractArray, c::AbstractArray; kwargs...)
     _same_axes(dest, a, b, c)
     isempty(dest) && return dest
     AK.foreachindex(dest, KA.get_backend(dest); kwargs...) do i
@@ -131,7 +137,7 @@ function launch_config end
 """
     Double32s.MATMUL_TILE
 
-Tile edge for [`Double32s.ak_matmul!`](@ref): `16`.
+Tile edge for [`Double32s.matmul!`](@ref): `16`.
 
 `16 × 16` is 256 work items — the same [`DEFAULT_GROUPSIZE`](@ref) the reductions
 use, and for the same reasons: whole warps on NVIDIA, whole wavefronts on AMD.

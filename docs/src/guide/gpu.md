@@ -37,7 +37,7 @@ pkg> add AMDGPU             # activates Double32sAMDGPUExt
 
 | you load | you get |
 |---|---|
-| nothing | the scalar, arrays, **all `ak_*` parallel routines on `CPU()`**, the capability probe |
+| nothing | the scalar, arrays, **the whole parallel layer on `CPU()`**, the capability probe |
 | `CUDA` | the same routines on `CUDABackend()`, plus `device`, `capability`, `math_mode` in the report |
 | `AMDGPU` | the same on `ROCBackend()`, plus `device` and `gcn_arch` |
 
@@ -126,14 +126,14 @@ The same shape works for any mapreduce:
 mapreduce(x -> Double32(x)^2, +, data)      # sum of squares, 48-bit carry
 ```
 
-### The portable alternative: `ak_sum`
+### The portable spelling: `sum(Double32, A)`
 
 Always available — `AcceleratedKernels` is a hard dependency:
 
 ```julia
-Double32s.ak_sum(data)
-Double32s.ak_sum(data; policy = Double32s.FastPolicy())
-Double32s.ak_sum(data; block_size = 512)
+sum(Double32, data)
+sum(Double32, data; policy = Double32s.FastPolicy())
+sum(Double32, data; block_size = 512)
 ```
 
 What it gives you that `sum` does not:
@@ -154,10 +154,10 @@ What it gives you that `sum` does not:
     onto `AcceleratedKernels` traded that away, and the trade is recorded rather
     than glossed: see design section 19.6.
 
-    `ak_matmul` is unaffected — it is still a hand-written kernel with a fixed
+    `matmul` is unaffected — it is still a hand-written kernel with a fixed
     tile loop, and **is** bit-identical across backends.
 
-Speed is a wash: 50 M elements on an RTX 5090, `ak_sum` 0.439 ms against
+Speed is a wash: 50 M elements on an RTX 5090, `sum(Double32, A)` 0.439 ms against
 `sum(Double32, A)` 0.417 ms.
 
 ### Reproducibility: three modes, no new API
@@ -170,23 +170,23 @@ would be surface area for no capability.
 | mode | spelling | guarantee |
 |---|---|---|
 | tuned | `sum(A)`, `sum(Double32, A)` | accurate; tree chosen by GPUArrays per device |
-| deterministic, per backend | `Double32s.ak_sum(A; block_size = 256)` | same bits on every run of that backend |
-| cross-backend | `Double32s.ak_matmul(A, B; tile = 16)` | same bits on **every** backend |
+| deterministic, per backend | `sum(Double32, A; block_size = 256)` | same bits on every run of that backend |
+| cross-backend | `Double32s.matmul(A, B; tile = 16)` | same bits on **every** backend |
 
 The second is asserted by repetition in the test suite, on `randn` data — note
 that testing it on something like `1/k` would be vacuous, because that sum is
 *exact* in `Double32` and every tree then agrees.
 
 Cross-backend bit-identity is available only where the package still writes its
-own kernel, which today means `ak_matmul`. Reductions gave it up when they moved
+own kernel, which today means `matmul`. Reductions gave it up when they moved
 onto `AcceleratedKernels`; if you need a cross-backend reproducible sum, do it
-with `ak_matmul`-style fixed structure or compare against an exact reference
+with `matmul`-style fixed structure or compare against an exact reference
 instead.
 
 ### Matrix multiply with exact products
 
 ```julia
-C = Double32s.ak_matmul(A, B)      # A, B :: CuArray{Float32}
+C = Double32s.matmul(A, B)      # A, B :: CuArray{Float32}
 ```
 
 Both element types are supported: `Float32` operands get **exact** products
@@ -214,19 +214,19 @@ from a normal session — `Pkg.test()` runs under `--check-bounds=yes`, which
 disables `@inbounds` and inflates both registers and spills.
 `docs/Reports/gpu_report.jl` regenerates the full table.
 
-### `ak_dot` is both more accurate *and* faster
+### `dot(Double32, x, y)` is both more accurate *and* faster
 
 ```julia
-Double32s.ak_dot(x, y)          # x, y :: CuArray{Float32}
+dot(Double32, x, y)                # x, y :: CuArray{Float32}; needs LinearAlgebra
 ```
 
 Every `Float32` product is formed **exactly** as a `Double32` before it is
 accumulated, so nothing is lost before the summation. It is also faster
-than `sum(x .* y)` — 1.52x, 0.414 ms vs 0.630 ms on 50 M pairs — because the
+than `sum(x .* y)` — 1.5x, 0.418 ms vs 0.630 ms on 50 M pairs — because the
 fused kernel never materializes the product array. This is the one place in this
 guide where the accurate spelling is also the fast one.
 
-`Double32s.ak_norm2(x)` follows the same shape, with an exact power-of-two
+`Double32s.norm2(x)` follows the same shape, with an exact power-of-two
 prescale so squares neither overflow nor underflow.
 
 ## Rules for writing device code with Double32
