@@ -68,8 +68,7 @@ so extra resident warps buy little. The reduction itself is
 | call | time |
 |:-----|-----:|
 | `sum(Double32, A::CuArray{Float32})` | 0.397 ms |
-| `sum(Double32, A)` | 0.397 ms |
-| `sum(A::CuArray{Double32})` | 0.403 ms |
+| `sum(Double32, A::CuArray{Double32})` | 0.403 ms |
 | `sum(A::CuArray{Double32})` | 0.433 ms |
 | `sum(A::CuArray{Float32})` | 0.152 ms |
 | `dot(Double32, A, B)` | 0.418 ms |

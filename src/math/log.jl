@@ -210,7 +210,7 @@ the sum, spending rounding on a term that was exact.
 # Examples
 ```jldoctest
 julia> log2(Double32(1024.0f0))
-1e+01
+10.0
 ```
 """
 function Base.log2(x::Double32)

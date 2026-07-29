@@ -115,18 +115,34 @@ function decimal(x::Double32)
     return setprecision(BigFloat, _DECIMAL_PRECISION) do
         v = big(x.hi) + big(x.lo)
         for k in 1:96
-            s = Printf.format(Printf.Format("%.$(k)g"), v)
-            isequal(tryparse(Double32, s), x) && return _floatlike(s)
+            s = _render(v, k)
+            isequal(tryparse(Double32, s), x) && return s
         end
-        s = Printf.format(Printf.Format("%.97g"), v)
+        s = _render(v, 97)
         @assert isequal(tryparse(Double32, s), x)
-        return _floatlike(s)
+        return s
     end
 end
 
-# `%g` drops the trailing ".0" from integer-valued results; a float type
-# should not print as `1`. Round-trip is unaffected: parse("1.0") == parse("1").
-_floatlike(s::String) = occursin(r"[.eE]", s) ? s : s * ".0"
+# Render `v` with `k` significant digits, choosing positional or exponential
+# form from the magnitude alone.
+#
+# `%g` cannot be used directly: it switches to exponential as soon as the
+# decimal exponent reaches the digit count, so the shortest round-tripping
+# rendering of ten would be `1e+01`. Deciding by magnitude instead follows
+# Julia's own convention for `Float64`, and keeps a visible fractional part in
+# both forms so the result reads as a float rather than an integer.
+function _render(v::BigFloat, k::Int)
+    normalized = Printf.format(Printf.Format("%.$(k - 1)e"), v)
+    # `Base.split`: the package's own `split` (arrays) shadows the name here.
+    mantissa, exponent = Base.split(normalized, 'e')
+    e = parse(Int, exponent)
+    if -5 < e < 16
+        return Printf.format(Printf.Format("%.$(max(k - 1 - e, 1))f"), v)
+    end
+    occursin('.', mantissa) || (mantissa *= ".0")
+    return string(mantissa, "e", e)          # `e+07` would read as padding
+end
 
 """
     show(io::IO, ::MIME"text/plain", x::Double32)

@@ -133,11 +133,43 @@ kernel_report
 wavefront_size
 ```
 
+## Display and parsing
+
+The two-argument `show` prints the pair form; the three-argument
+`show(io, MIME"text/plain"(), x)` prints the shortest decimal that parses back
+to the same value, verified per value before printing. Parsing runs through a
+384-bit `BigFloat` and is host-only.
+
+```@docs
+decimal
+Base.parse(::Type{Double32}, ::AbstractString)
+Base.tryparse(::Type{Double32}, ::AbstractString)
+```
+
+## Conversions to other float types
+
+`Float16`, `Float32`, `Float64`, `BigFloat`, and the integer types convert
+through their `Base` constructors. Conversions narrower than `Float32` round
+correctly rather than rounding twice — see `Double32s.to_odd_hi` in
+[Internals](@ref internals).
+
+Two further types are reached through package extensions, so neither is a
+dependency of this package:
+
+| load | what becomes available |
+|---|---|
+| `BFloat16s` | `promote_rule(Double32, BFloat16) === Double32`, exact widening, correctly rounded narrowing |
+| `DoubleFloats` | conversion both ways for `DoubleFloat{Float16}`, `DoubleFloat{Float32}`, and `DoubleFloat{Float64}`; promotion with the wider and narrower pairs |
+
+`DoubleFloats.DoubleFloat{Float32}` carries the same nominal precision as
+`Double32` and deliberately has **no** promotion rule in either direction:
+converting explicitly is the only way to mix them, so neither package's
+semantics is silently preferred in a mixed expression.
+
 ## Elementary functions
 
-Roadmap Phase 6. Measured worst-case errors are in
-`docs/Reports/accuracy_report.md`; none of these is faithfully rounded and none
-is claimed to be.
+Measured worst-case errors are in `docs/Reports/accuracy_report.md`. None of
+these is faithfully rounded, and none is claimed to be.
 
 ```@docs
 rsqrt

@@ -329,9 +329,9 @@ $(join(hyp_rows, "\n"))
 |:----------|-----:|:---------|------:|
 $(join(red_rows, "\n"))
 
-`sum(Double32, A::Vector{Float32})` is the package's headline use: a
-`Float32` data stream accumulated in ~48-bit precision through Base's own
-`mapreduce` machinery, no package function needed.
+`sum(Double32, A::Vector{Float32})` is the package's primary use: a
+`Float32` data stream accumulated at ~48-bit precision through Base's own
+`mapreduce` machinery, requiring no package function.
 
 ## Linear Algebra (generic algorithms)
 

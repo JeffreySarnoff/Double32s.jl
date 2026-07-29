@@ -46,19 +46,48 @@ julia> Double32(1.0f0, 0.5f0)             # overlapping words: renormalized
 1.5
 ```
 
-The REPL displays a `Double32` as a decimal — the *shortest* one that parses
-back to the identical value via `parse(Double32, s)`, checked per value before
-printing. The exact pair is still there: `repr` (two-argument `show`) prints
-`Double32(hi, lo)`, and that form reconstructs the value too — Base's
-round-trip contract, kept by both renderings.
+## Display and parsing
+
+A `Double32` displays at the REPL as a decimal: the shortest string that parses
+back to the identical value under `parse(Double32, s)`. The round trip is
+verified for that value before the string is printed, rather than inferred from
+a digit count.
+
+The pair remains available through `repr`, which is the two-argument `show`:
 
 ```jldoctest
-julia> repr(Double32(1.0f0) / 3)          # the representation, on request
+julia> Double32(1.0f0) / 3                # decimal rendering
+0.333333333333333
+
+julia> repr(Double32(1.0f0) / 3)          # the underlying representation
 "Double32(0.33333334f0, -9.934108f-9)"
 
 julia> parse(Double32, "0.333333333333333") === Double32(1.0f0) / 3
 true
 ```
+
+Both renderings satisfy Base's round-trip contract, by different routes: the
+pair form is a constructor call that evaluates back to the value, and the
+decimal form parses back to it under `parse`.
+
+Which of the two appears follows Base's usual rule, so it depends on the
+context rather than on this package: array display renders each element
+through the three-argument `show` and prints decimals, while tuples, `Dict`
+values, `string`, and `$` interpolation all use the two-argument form and
+print pairs.
+
+```jldoctest
+julia> [Double32(1.0f0) / 3]              # array display: decimal
+1-element Vector{Double32}:
+ 0.333333333333333
+
+julia> (Double32(1.0f0) / 3,)             # tuple display: the pair
+(Double32(0.33333334f0, -9.934108f-9),)
+```
+
+A decimal may be long. `Double32(1.0f-7)` prints 39 significant digits, because
+the pair lattice is fine enough that no shorter decimal identifies that exact
+value — the digits are required, not decorative.
 
 ## Arithmetic
 
@@ -85,8 +114,8 @@ julia> fma(Double32(2.0f0), Double32(3.0f0), one(Double32))   # compensated, not
 7.0
 ```
 
-Mixed expressions promote the way you would expect — and one case deserves
-attention:
+Mixed expressions promote as the type hierarchy implies, with one case worth
+stating explicitly:
 
 ```jldoctest
 julia> one(Double32) + 1                  # integers promote to Double32
@@ -95,7 +124,7 @@ julia> one(Double32) + 1                  # integers promote to Double32
 julia> one(Double32) + 1.0f0              # Float32 promotes to Double32
 2.0
 
-julia> one(Double32) + 1.0                # Float64 WINS: wider in both directions
+julia> one(Double32) + 1.0                # Float64 wins: wider in both directions
 2.0
 ```
 
@@ -117,7 +146,7 @@ julia> x > 1.0
 true
 ```
 
-## Conversions out
+## Converting to other types
 
 ```jldoctest
 julia> x = Double32(1.0f0) / 3;
@@ -146,7 +175,7 @@ julia> eps(Double32)                      # nominal 48-bit ulp — see the warni
 7.105427357601001858711242675781e-15
 
 julia> floatmax(Double32)
-3.40282356779733e+38
+3.40282356779733e38
 
 julia> typemax(Double32), typemin(Double32)
 (Double32(Inf32, 0.0f0), Double32(-Inf32, 0.0f0))
@@ -166,12 +195,15 @@ julia> typemax(Double32), typemin(Double32)
 low word is genuinely random, not the zero that a naive
 `Double32(rand(Float32))` would produce:
 
-```julia
+```jldoctest
 julia> using Random
 
 julia> v = rand(MersenneTwister(1), Double32, 3)
 3-element Vector{Double32}:
- Double32(0.23603334f0, -6.352898f-9)
- Double32(0.34651703f0, 4.2467468f-9)
- Double32(0.31270003f0, 1.1071297f-8)
+ 0.567905329600336
+ 0.968355522079257
+ 0.68204096259782
+
+julia> repr(v[1])                         # the low word is not zero
+"Double32(0.5679053f0, 2.2784235f-8)"
 ```

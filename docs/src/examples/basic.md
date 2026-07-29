@@ -21,8 +21,8 @@ julia> Float64(1.0f0 / 3.0f0)   # Float32 alone: ~7
 0.3333333432674408
 ```
 
-The two words are visible in the printed form: the high word is the nearest
-`Float32`, the low word carries what the high word could not.
+The value displays as a decimal; `repr` shows the two words behind it, the high
+word being the nearest `Float32` and the low word carrying the remainder.
 
 ```jldoctest basic
 julia> Float64(sqrt(Double32(2.0f0)))
@@ -32,7 +32,7 @@ julia> sqrt(2.0)                # Float64 reference
 1.4142135623730951
 ```
 
-## The headline use: accumulate Float32 data exactly
+## Accumulating Float32 data without loss
 
 Summing `Float32` data in `Float32` loses digits to accumulated rounding.
 Summing it through `Double32` needs **no package-specific API** — `Base`
@@ -69,7 +69,7 @@ julia> Float64(sum(Double32, v))
 The reference value to 17 digits is `12.090146195397210`: every printed digit
 of the `Double32` sum is correct.
 
-## Elementary functions at full width
+## Elementary functions
 
 The whole elementary family — `exp`, `log`, trigonometric, hyperbolic, and
 their inverses — is implemented directly on the pair format and measured
@@ -103,16 +103,17 @@ julia> expm1(x) === exp(x) - one(Double32)   # the naive spelling differs
 false
 ```
 
-## Integer powers and exact operations
+## Integer powers and exact results
 
-Operations that should be exact, are, and stay inside the type:
+Operations whose results are exactly representable remain exact, and stay
+within the type:
 
 ```jldoctest basic
 julia> Double32(2.0f0)^10
 1024.0
 
 julia> log2(Double32(1024.0f0))
-1e+01
+10.0
 
 julia> Double32(1.0f0) + 0.5f0          # Float32 promotes to Double32
 1.5

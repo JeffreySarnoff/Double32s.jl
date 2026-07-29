@@ -18,7 +18,7 @@ words, canonicalized so `hi` is the nearest `Float32` to that sum and
 `|lo| ≤ ½ulp(hi)`. Nominal precision is 48 bits (`precision(Double32) == 48`),
 unit roundoff `u² = 2⁻⁴⁸ ≈ 3.6e-15` relative.
 
-Two consequences to internalize:
+Two consequences follow, and both matter in practice:
 
 **It is not a lattice.** Canonicality bounds `lo` from above only, so
 `(1.0f0, 2f0^-149)` is a legitimate value — the representable set is
@@ -57,7 +57,7 @@ of the two neighboring 48-bit model values.
 | `sqrt` | **0.75 ulp48** | **yes, 0 violations** | incl. near-perfect-square adversaries |
 | `fma`/`muladd` | 2.0000 u²·M | — | derived bound `2u²(1+80u)·M`, tight |
 
-Three of these deserve their stories:
+Three of these warrant explanation:
 
 **Addition is proven, not just measured.** The kernel is AccurateDWPlusDW:
 Joldeş, Muller & Popescu, *ACM TOMS* 44(2), Article 15res (2017),
@@ -68,11 +68,11 @@ asymptotically optimal by Muller & Rideau, *ACM TOMS* 48(1), Article 9
 Algorithm 4. DOIs `10.1145/3121432`, `10.1145/3484514`.
 
 **Division is deliberately not faithful.** A second Newton correction is
-implemented and measured (2.30 ulp48 worst) — it *still* isn't faithful, and
-it doubles the cost of every device kernel. So every policy uses one
-correction and the 4.0-ulp48 bound is documented instead of wished away.
-Faithful double-word division requires a different algorithm, not a repeated
-correction.
+implemented and measured (2.30 ulp48 worst case); it is *still* not faithful,
+and it doubles the cost of every device kernel. Every policy therefore applies
+one correction, and the 4.0-ulp48 bound is documented rather than described as
+smaller than it is. Faithful double-word division requires a different
+algorithm, not a repeated correction.
 
 **`fma` is bounded absolutely, of necessity.** Under near-total cancellation
 the true result of `x*y + z` can be `2^-173` relative to unit operands —
@@ -118,7 +118,7 @@ the true result genuinely rounds to `Inf`:
 julia> x = Double32(2.0f0^64, -2.0f0^40);       # x*x overflows its leading term...
 
 julia> x * x                                     # ...but the true square is finite
-3.402823263561204650859e+38
+3.402823263561204650859e38
 ```
 
 ## Comparing against other types
@@ -126,8 +126,9 @@ julia> x * x                                     # ...but the true square is fin
 - `==`/`<`/`isless` against `Float64` are computed **exactly in the pair
   domain**, never through the lossy conversion (918 boundary cases, 0
   mismatches);
-- `Float32`, `Float16`, and integers convert exactly, so promotion is safe
-  there;
+- `Float32`, `Float16`, `BFloat16`, and integers widen into `Double32`
+  exactly, so promotion loses nothing; narrowing back rounds once, not twice
+  (`Double32s.to_odd_hi`);
 - `hash` follows the `Float64` value, so `Dict` and `Set` behave consistently
   across types; `isequal`/`isless` form a total order tested over the entire
   signed-zero surface.

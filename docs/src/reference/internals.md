@@ -4,12 +4,12 @@
 CurrentModule = Double32s
 ```
 
-Not public API — documented because the docstrings carry the proofs,
-measurements, and defect histories that make the kernels auditable. Read
-these before touching the corresponding code; several record failure modes
-that were paid for.
+Not public API. These are documented because the docstrings carry the proofs,
+measurements, and defect histories that make the kernels auditable. Read them
+before modifying the corresponding code: several record failure modes that
+were found the expensive way.
 
-## The three-layer shape
+## The three-layer operation structure
 
 Every operation follows design section 8.0: a branch-free tuple kernel
 (layer 1), a policy method with the single output check (layer 2), a
@@ -41,11 +41,12 @@ Double32s.compensated_fma
 Double32s.square_root
 ```
 
-## Construction internals
+## Construction and conversion internals
 
 ```@docs
 Double32s.Raw
 Double32s.raw
+Double32s.to_odd_hi
 Double32s.iscanonical
 Double32s.canonical_nonfinite
 Double32s.reference

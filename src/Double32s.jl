@@ -41,6 +41,7 @@ public launch_config, kernel_report, wavefront_size
 public matmul!, matmul, MATMUL_TILE, MATMUL_BLOCK
 public compensated_dot, compensated_mapreduce, compensated_sum, compensated_norm2
 public rsqrt, log_or_nan, TRIG_ARG_LIMIT
+public decimal
 public LN2, INV_LN2, LN10, LOG10_E, LN2_C2, PI_D32, PIO2_D32, PIO4_D32
 public LOG2_10, LOG10_2, LOG10_2_C2, LOG1P_COEFFS
 public TWO_OVER_PI, PIO2_C3, SQRT3_D32

@@ -116,7 +116,7 @@ removes the crossing). A view or wrapper falls back to `Base`'s generic
 # Examples
 ```jldoctest
 julia> sum(Double32, Float32[1, 2, 3, 4])
-1e+01
+10.0
 ```
 """
 Base.sum(::Type{Double32}, A::DenseArray;

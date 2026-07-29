@@ -7,35 +7,36 @@ DocTestSetup = quote
 end
 ```
 
-This is the page the package exists for. `Double32` is designed so that the
-**same scalar methods** that run on the host compile cleanly into GPU kernels:
-every hot path is branch-free (one output check per operation), allocation-free,
-type-stable, and built exclusively from `Float32` adds, multiplies, and
-**genuine `fma`** — the operations every GPU executes at full rate.
+GPU execution is what the format is designed for. The **same scalar methods**
+that run on the host compile cleanly into GPU kernels: every hot path is
+branch-free (one output check per operation), allocation-free, type-stable, and
+built exclusively from `Float32` adds, multiplies, and **genuine `fma`** — the
+operations every GPU executes at full rate.
 
-!!! note "What works today vs. what is roadmap"
-    Everything on this page runs today. The parallel layer is built on
+!!! note "Implementation status"
+    Everything on this page is implemented. The parallel layer is built on
     **`AcceleratedKernels`**, a hard dependency, with `KernelAbstractions`
     alongside it for the one kernel AK has no equivalent for (the tiled
-    matmul). **`CUDA` and `AMDGPU` stay weak dependencies** — a host-only user
-    pulls no vendor stack. The device paths in the test suite run on real
-    hardware when a device is present and are skipped, not faked, when it is
-    not.
+    matmul). **`CUDA` and `AMDGPU` remain weak dependencies** — a host-only
+    user pulls no vendor stack. The device paths in the test suite run on real
+    hardware when a device is present, and are skipped rather than simulated
+    when it is not.
 
-    Warp-shuffle reduction was implemented and measured at **0.48–0.56×** the
-    tree's speed, so it does not ship — see design section 15.2 for why an
-    expensive operator inverts that usual advice.
+    A warp-shuffle reduction was implemented and measured at **0.48–0.56×** the
+    speed of the tree, so it does not ship — design section 15.2 records why an
+    expensive operator inverts the usual advice.
 
-## Installing: you choose the backend
+## Installation and backend selection
 
 ```julia
-pkg> add Double32s          # AcceleratedKernels, KernelAbstractions, Adapt, Random
+using Pkg
+Pkg.add(url = "https://github.com/JeffreySarnoff/Double32s.jl")
 
-pkg> add CUDA               # activates Double32sCUDAExt
-pkg> add AMDGPU             # activates Double32sAMDGPUExt
+Pkg.add("CUDA")             # activates Double32sCUDAExt
+Pkg.add("AMDGPU")           # activates Double32sAMDGPUExt
 ```
 
-| you load | you get |
+| also loaded | what it provides |
 |---|---|
 | nothing | the scalar, arrays, **the whole parallel layer on `CPU()`**, the capability probe |
 | `CUDA` | the same routines on `CUDABackend()`, plus `device`, `capability`, `math_mode` in the report |
@@ -45,7 +46,7 @@ The parallel routines are always present because `AcceleratedKernels` is a hard
 dependency — loading a vendor package adds a *backend*, not the functions
 themselves. Only the vendor-specific reporting lives in an extension.
 
-## Why a pair of Float32s beats Float64 on a GPU
+## Why a pair of `Float32` words outperforms `Float64`
 
 On most consumer GPUs (and many datacenter parts), `Float64` arithmetic runs
 at 1/32 to 1/64 the rate of `Float32`. A `Double32` addition costs about 20
@@ -60,7 +61,7 @@ GPUs:
 - a single-rounding fused multiply-add (`fma.rn.f32` on PTX,
   `v_fma_f32` on GCN).
 
-## The element type is device-ready
+## The element type on the device
 
 `Double32` is an 8-byte immutable `isbits` struct of two `Float32`s. That
 means:
@@ -99,10 +100,9 @@ into the kernel body.
     last place or two. Compare a reduction against an exact reference, never
     against the host's reduction.
 
-## The headline pattern: Float32 data, Double32 accumulator
+## Float32 data, Double32 accumulator
 
-Most GPU data is `Float32`. The accuracy problem is the *accumulation*, and
-Base already spells the fix:
+Most GPU data is `Float32`. The accuracy problem is the *accumulation*:
 
 ```julia
 using CUDA, Double32s
@@ -126,9 +126,9 @@ The same shape works for any mapreduce:
 mapreduce(x -> Double32(x)^2, +, data)      # sum of squares, 48-bit carry
 ```
 
-### The portable spelling: `sum(Double32, A)`
+### Backend-portable reductions: `sum(Double32, A)`
 
-Always available — `AcceleratedKernels` is a hard dependency:
+Always available, since `AcceleratedKernels` is a hard dependency:
 
 ```julia
 sum(Double32, data)
@@ -136,12 +136,12 @@ sum(Double32, data; policy = Double32s.FastPolicy())
 sum(Double32, data; block_size = 512)
 ```
 
-What it gives you that `sum` does not:
+What this form provides that `sum` does not:
 
 - **a reproducible tree, per backend.** For a fixed `block_size` and length the
   tree is fixed, so repeated runs on the same backend return the same bits.
-- **a policy.** `FastPolicy()` is about 8 flops per step instead of 20.
-- **backends without GPUArrays**, where `sum` has no fast path at all.
+- **a policy.** `FastPolicy()` costs about 8 flops per step instead of 20.
+- **support for backends without GPUArrays**, where `sum` has no fast path.
 
 !!! warning "Reductions are not bit-identical across backends"
     A CPU reduction and a CUDA reduction of the same array return **different
@@ -151,21 +151,23 @@ What it gives you that `sum` does not:
 
     An earlier version of this package shipped a hand-written fixed-tree
     reduction that *was* bit-identical across backends. Moving the reductions
-    onto `AcceleratedKernels` traded that away, and the trade is recorded rather
-    than glossed: see design section 19.6.
+    onto `AcceleratedKernels` gave that up; the trade is recorded in design
+    section 19.6 rather than left implicit.
 
-    `matmul` is unaffected — it is still a hand-written kernel with a fixed
+    `matmul` is unaffected — it remains a hand-written kernel with a fixed
     tile loop, and **is** bit-identical across backends.
 
-Speed is a wash: 50 M elements on an RTX 5090, `sum(Double32, A)` 0.439 ms against
-`sum(Double32, A)` 0.417 ms.
+Throughput is comparable to the plain generic: over 50 M elements on an RTX
+5090, `sum(Double32, A)` on a `CuArray{Double32}` measures 0.403 ms against
+0.433 ms for `sum(A)` on the same array. The accuracy and reproducibility come
+free of a throughput penalty, not in exchange for one.
 
-### Reproducibility: three modes, no new API
+### Reproducibility modes
 
-Reduction order changes finite-precision results, so "which answer" is a real
-choice. Design section 19.6 asks for three modes; all three are existing
-spellings, and no keyword was added because a keyword that forwarded to `sum`
-would be surface area for no capability.
+Reduction order changes finite-precision results, so the choice of answer is a
+real one. Design section 19.6 requires three modes; all three are existing
+spellings. No keyword was added, because a keyword that merely forwarded to
+`sum` would add API surface without adding capability.
 
 | mode | spelling | guarantee |
 |---|---|---|
@@ -183,7 +185,7 @@ onto `AcceleratedKernels`; if you need a cross-backend reproducible sum, do it
 with `matmul`-style fixed structure or compare against an exact reference
 instead.
 
-### Matrix multiply with exact products
+### Matrix multiplication with exact products
 
 ```julia
 C = Double32s.matmul(A, B)      # A, B :: CuArray{Float32}
@@ -200,7 +202,7 @@ about seven more decimal digits.** For host matrices, `A * B` on
 `Matrix{Double32}` uses a cache-aware compensated `mul!` that is ~28× the
 generic fallback's speed at n = 64.
 
-### Inspecting the device
+### Device and kernel inspection
 
 ```julia
 Double32s.capability_report(CUDABackend())   # probe + device + math mode
@@ -208,31 +210,31 @@ Double32s.launch_config(CUDABackend())       # workgroup size used, and what CUD
 Double32s.kernel_report(CUDABackend())       # registers, spill space, occupancy
 ```
 
-`kernel_report` is the one to reach for when a kernel of yours gets slow:
-`local_bytes` is spill space, and a jump there is usually the cause. Read it
+`kernel_report` is the diagnostic for a kernel that has slowed down:
+`local_bytes` is spill space, and an increase there is the usual cause. Read it
 from a normal session — `Pkg.test()` runs under `--check-bounds=yes`, which
-disables `@inbounds` and inflates both registers and spills.
+disables `@inbounds` and inflates both register counts and spills.
 `docs/Reports/gpu_report.jl` regenerates the full table.
 
-### `dot(Double32, x, y)` is both more accurate *and* faster
+### `dot(Double32, x, y)`: exact products at higher throughput
 
 ```julia
 dot(Double32, x, y)                # x, y :: CuArray{Float32}; needs LinearAlgebra
 ```
 
 Every `Float32` product is formed **exactly** as a `Double32` before it is
-accumulated, so nothing is lost before the summation. It is also faster
-than `sum(x .* y)` — 1.5x, 0.418 ms vs 0.630 ms on 50 M pairs — because the
-fused kernel never materializes the product array. This is the one place in this
-guide where the accurate spelling is also the fast one.
+accumulated, so nothing is lost ahead of the summation. It is also faster than
+`sum(x .* y)` — 1.5×, 0.418 ms against 0.630 ms on 50 M pairs — because the
+fused kernel never materializes the product array.
 
 `Double32s.norm2(x)` follows the same shape, with an exact power-of-two
 prescale so squares neither overflow nor underflow.
 
-## Rules for writing device code with Double32
+## Rules for device code
 
-These rules are what the package's own kernels follow, and they are the
-difference between "compiles and is right" and subtle device-only wrongness.
+The package's own kernels follow these rules. Each one separates code that is
+correct on a device from code that compiles and returns quietly wrong results
+there.
 
 ### 1. Use `sqrt_or_nan`, never `sqrt`, in kernels
 
@@ -246,14 +248,14 @@ f(x) = Double32s.sqrt_or_nan(x)       # device-safe
 B .= f.(A)
 ```
 
-### 2. Never `@fastmath`, and know your `muladd` from your `fma`
+### 2. Never `@fastmath`; distinguish `muladd` from `fma`
 
-The arithmetic is *made of* rounding-error bookkeeping. `@fastmath` licenses
-the compiler to reassociate it away, silently. Related: `Base.muladd` merely
-*permits* fusion while `Base.fma` *requires* it — this package builds on
-explicit `fma` internally, and `muladd(::Double32, ...)` is safe because it
-routes to the same compensated kernel. But never "optimize" package internals
-from `fma` to `muladd`.
+The arithmetic consists of rounding-error bookkeeping. `@fastmath` licenses the
+compiler to reassociate that bookkeeping away, silently. Relatedly,
+`Base.muladd` merely *permits* fusion while `Base.fma` *requires* it. This
+package uses explicit `fma` internally, and `muladd(::Double32, ...)` is safe
+because it routes to the same compensated kernel — but internal `fma` calls
+must never be rewritten as `muladd` in the name of optimization.
 
 ### 3. Resolve policies on the host, pass them positionally
 
@@ -266,10 +268,10 @@ acc = Double32s.add(Double32s.FastPolicy(), acc, x)   # 8 flops vs 20, Float32-l
 ```
 
 Never test a policy at runtime inside a kernel, and never pass one as a
-keyword — keywords don't participate in dispatch. Resolve user-facing options
-to singletons at the launch boundary, then pass them as positional arguments.
+keyword: keywords do not participate in dispatch. Resolve user-facing options
+to singletons at the launch boundary, then pass them positionally.
 
-### 4. Probe the device — don't assume
+### 4. Probe the device rather than assume its capabilities
 
 Two hardware properties carry the whole error analysis, and they fail
 differently:
@@ -277,8 +279,8 @@ differently:
 - **a genuine fused multiply-add.** This is not negotiable. Every error-free
   transformation on a product goes through `two_prod_`, whose residual is
   *identically zero* when the multiply and the add round separately. An unfused
-  backend does not give you a slightly worse `Double32`; it gives you a
-  `Float32` wearing two words, silently.
+  backend does not degrade `Double32` slightly — it silently reduces it to
+  `Float32` precision carried in two words.
 - **gradual underflow.** Weaker: flush-to-zero does not void the arithmetic, it
   moves the boundary below which the exactness claims hold.
 
@@ -315,8 +317,8 @@ julia> Double32s.capability_report(CUDABackend())
 ```
 
 Passing an array instead of a backend probes through broadcast rather than a
-kernel launch — useful, and worth doing as well as the kernel route, since a
-backend may compile the two paths under different inlining.
+kernel launch. Both routes are worth running, because a backend may compile
+them under different inlining.
 
 !!! note "CUDA's math mode is context, not a verdict"
     `math_mode` appears in the report because it is task-local and invisible in
@@ -344,7 +346,7 @@ branch-free and a **single check of the output high word** routes to a cold
 finite values take, so warps stay convergent except in the rare guard bands
 (overflow rescue, deep-underflow rescue).
 
-## Memory layout: one array or two
+## Memory layout: array-of-structs or split words
 
 `Array{Double32}` (array-of-structs) is the default and right answer for
 elementwise work — one coalesced 64-bit load per element.
@@ -395,10 +397,19 @@ machinery in with it.
 
 See [Arrays, on CPU and GPU](@ref arrays-guide) for the full discussion.
 
-## What the roadmap adds
+## Measured outcomes of the optimization phases
 
-In design-document order (phases 3–5): CUDA warp-shuffle and AMDGPU wavefront
-reductions; tiled matrix kernels with `Float32×Float32 → Double32` accumulation.
-The scalar semantics documented here are frozen ahead of all of it — device
-results match the host reference bit-for-bit wherever the capability probe says
-the hardware can, and the test suite checks it.
+The vendor-specific optimizations the design proposed were implemented and
+measured, and two of the three were rejected on the measurement:
+
+| candidate | outcome |
+|---|---|
+| warp-shuffle reduction (CUDA) | 0.48–0.56× the tree; **rejected**, design section 15.2 |
+| direct `CUDA.@cuda` reduction kernel | within 1.5% of the portable kernel; **rejected**, design section 15.5 |
+| tiled matrix kernel | **shipped**, later rebuilt split-channel; 0.42 ms at 1024³ |
+
+The portable path won twice, and in one case the apparent vendor advantage
+turned out to be a host-side over-synchronization in the portable driver rather
+than a property of the kernel. Scalar semantics are unchanged by any of it:
+device results match the host reference bit-for-bit wherever the capability
+probe reports the hardware can support them, and the test suite asserts it.

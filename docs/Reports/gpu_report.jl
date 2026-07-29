@@ -112,8 +112,7 @@ open(OUT, "w") do io
     Ad = CuArray(Double32.(Array(A)))
     D = similar(Ad)
     rows = (("`sum(Double32, A::CuArray{Float32})`",    () -> sum(Double32, A)),
-            ("`sum(Double32, A)`",               () -> sum(Double32, A)),
-            ("`sum(A::CuArray{Double32})`",   () -> sum(Double32, Ad)),
+            ("`sum(Double32, A::CuArray{Double32})`", () -> sum(Double32, Ad)),
             ("`sum(A::CuArray{Double32})`",      () -> sum(Ad)),
             ("`sum(A::CuArray{Float32})`",       () -> sum(A)),
             ("`dot(Double32, A, B)`",                   () -> dot(Double32, A, B)),

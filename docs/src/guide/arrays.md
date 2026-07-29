@@ -35,11 +35,11 @@ A = CuArray(rand(Double32, 10^6))
 B = A .* A .- Double32(0.5f0)              # fused device kernel
 ```
 
-## Reductions: use Base's spelling
+## Reductions through the Base generics
 
-The important patterns need **no package function** — once the scalar methods
-exist, Base's `mapreduce` machinery does the rest, on CPU and through
-GPUArrays on device:
+The important patterns require **no package function**. Once the scalar methods
+exist, Base's `mapreduce` machinery supplies the rest, on the CPU and through
+GPUArrays on a device:
 
 ```jldoctest arrays
 julia> A32 = Float32[1f8; fill(1.0f0, 1000)];   # big value then many small ones
@@ -53,7 +53,7 @@ julia> Float64(sum(Double32, A32))              # Double32 accumulator: exact
 
 | task | spelling | notes |
 |---|---|---|
-| sum `Float32` data accurately | `sum(Double32, A)` | the headline pattern |
+| sum `Float32` data accurately | `sum(Double32, A)` | the primary pattern |
 | sum a `Double32` array | `sum(A)` | Base pairwise reduction |
 | min/max/extrema | `minimum(A)`, … | via the package's `min`/`max` |
 | sort | `sort!(A)` | via `isless`; total order is tested exhaustively |
@@ -74,9 +74,9 @@ lost until the accumulation itself — strictly better than rounding each
 product to `Float32` first. [`Double32s.compensated_norm2`](@ref) adds an exact
 power-of-two scaling so squares neither overflow nor underflow:
 
-```julia
+```jldoctest arrays
 julia> Double32s.compensated_norm2(Double32[1f30, 1f30])   # Float32 squares would overflow
-Double32(1.4142136f30, 9.023091f22)
+1.414213583653427e30
 ```
 
 [`Double32s.compensated_sum`](@ref) and
@@ -123,12 +123,12 @@ exception machinery.
     reachable for expert seed/correct kernels — with the canonical invariant
     then the caller's responsibility.
 
-### On the GPU
+### Constructing a split array on a device
 
-Three ways in, all device resident.
+There are three routes, all of which keep the data resident on the device.
 
-**Split what you already have.** `split` and `unsplit` are broadcasts, so they
-stay on whatever backend owns the data — no host round trip, no scalar
+**Split an existing array.** `split` and `unsplit` are broadcasts, so they stay
+on whatever backend owns the data, with no host round trip and no scalar
 indexing:
 
 ```julia
@@ -177,15 +177,16 @@ scale!(CUDABackend())(S, Double32(2.0f0); ndrange = length(S))
     `Adapt.adapt_structure` therefore uses the unchecked path — the same
     contract as `raw` on the scalar.
 
-## Choosing between them
+## Choosing a representation
 
 | situation | representation |
 |---|---|
 | elementwise math, broadcast | `Array{Double32}` / `CuArray{Double32}` |
 | mixed with `Float32`-only passes | `SplitDouble32Array` |
-| reduction scratch/partials | split arrays of partial words |
-| interop with vendor `Float32` routines | `SplitDouble32Array` |
-| benchmarks disagree with this table | believe the benchmarks |
+| reduction scratch and partials | split arrays of partial words |
+| interoperation with vendor `Float32` routines | `SplitDouble32Array` |
 
-The design's measured recommendation (section 13): AoS as the primary user
-representation, SoA where a kernel genuinely consumes the words separately.
+The design's measured recommendation (section 13) is array-of-structs as the
+primary user representation, and structure-of-arrays where a kernel genuinely
+consumes the two words separately. The table is a starting point; where a
+measurement on your own workload disagrees with it, the measurement governs.

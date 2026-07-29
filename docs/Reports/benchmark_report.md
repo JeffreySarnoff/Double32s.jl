@@ -110,9 +110,9 @@ this package's `/` cannot avoid.
 | `compensated_norm2(::Vector{Double32})` | 108.26 µs | `norm` (BLAS, Float64) 1.86 µs | 58.2x |
 | `compensated_mapreduce(abs2, ::Vector{Double32})` | 70.66 µs | `sum(abs2, ::Vector{Float64})` 982 ns | 66.5x |
 
-`sum(Double32, A::Vector{Float32})` is the package's headline use: a
-`Float32` data stream accumulated in ~48-bit precision through Base's own
-`mapreduce` machinery, no package function needed.
+`sum(Double32, A::Vector{Float32})` is the package's primary use: a
+`Float32` data stream accumulated at ~48-bit precision through Base's own
+`mapreduce` machinery, requiring no package function.
 
 ## Linear Algebra (generic algorithms)
 

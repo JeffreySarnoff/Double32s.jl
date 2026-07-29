@@ -32,7 +32,7 @@ supported API is `public` and reached as `Double32s.name` — see
     `module Double32`, the name `Double32` *is* the module. So the package and
     module are `Double32s`, and the scalar is `Double32`.
 
-## Why this exists
+## Why a double-word `Float32`
 
 | | `Float32` | `Double32` | `Float64` on GPU |
 |---|---|---|---|
@@ -42,8 +42,8 @@ supported API is `public` and reached as `Double32s.name` — see
 | GPU execution units | native | native `Float32` + FMA | often 1/32–1/64 rate |
 | memory per element | 4 B | 8 B | 8 B |
 
-The headline use is accumulating `Float32` data at ~48-bit precision with no
-package-specific API at all:
+The primary use is accumulating `Float32` data at ~48-bit precision, which
+requires no package-specific API:
 
 ```julia
 sum(Double32, A)               # A::AbstractArray{Float32} — Base spells it
@@ -53,10 +53,10 @@ Every scalar operation is allocation-free, type-stable, and branch-free on the
 hot path — a single output check routes to a cold guarded path — and the
 kernels are written so the same code compiles for device execution.
 
-## What it is not
+## What the format does not provide
 
-`Double32` is **not** an IEEE format with a uniform significand lattice, and
-this documentation never pretends otherwise:
+`Double32` is **not** an IEEE format with a uniform significand lattice. Four
+consequences follow, and each is stated wherever it becomes load-bearing:
 
 - the distance to the next representable value is *not* `eps(Double32)`; it
   can be as small as `2f0^-149` beside a high word of `1.0f0`. `nextfloat`
@@ -73,36 +73,41 @@ Every accuracy claim here carries the measurement that backs it; the design
 documents under `docs/Design/` record the full audit trail, including the
 defects found on the way.
 
-## Installation, and what you pay for
+## Installation
+
+The package is not yet registered, so install it from its repository:
 
 ```julia
-pkg> add Double32s
+using Pkg
+Pkg.add(url = "https://github.com/JeffreySarnoff/Double32s.jl")
 ```
 
-That is the whole install. `Double32s` depends on `AcceleratedKernels`,
-`KernelAbstractions`, `Adapt`, and `Random` — a host-only user still pulls **no
-vendor stack**, and the whole parallel layer works on `CPU()` out of the
-box. GPU support arrives as **package extensions**, activated by whatever you
-load:
+The dependencies are `AcceleratedKernels`, `KernelAbstractions`, `Adapt`,
+`LinearAlgebra`, `Printf`, and `Random`. A host-only user pulls **no vendor
+stack**, and the entire parallel layer runs on `CPU()` with nothing further
+installed. Vendor backends and interoperation with other float types arrive as
+**package extensions**, activated by whatever else is loaded:
 
-```julia
-pkg> add CUDA        # or AMDGPU, or KernelAbstractions alone
-```
-
-| you load | what activates |
+| also loaded | what it activates |
 |---|---|
 | nothing | scalar, arrays, elementary functions, **the whole parallel layer on `CPU()`**, capability probe |
 | `CUDA` | the same routines on `CUDABackend()`, plus `device`, `capability`, `math_mode` in [`capability_report`](@ref) |
 | `AMDGPU` | the same on `ROCBackend()`, plus `device`, `gcn_arch` |
+| `BFloat16s` | `BFloat16` promotion and correctly rounded conversion both ways |
+| `DoubleFloats` | conversion to and from `DoubleFloat{Float16,Float32,Float64}` |
 
 ## Status
 
-The scalar core is complete, measured, and tested (≈2.5 million assertions).
+The scalar core is complete, measured, and tested (2.66 million assertions).
 The parallel layer is built on `AcceleratedKernels`; device arithmetic is
-asserted bit-identical to the host, and the capability probe runs on the backend
-being questioned. Reductions are reproducible per backend but **not** across
-backends — see the GPU guide. Warp-shuffle reductions,
-deterministic fixed-tree reduction, and tiled matrix kernels remain roadmap.
+asserted bit-identical to the host, and the capability probe runs on the
+backend being questioned. Reductions are reproducible per backend but **not**
+across backends — see the GPU guide.
+
+All design phases are complete, reductions and matrix kernels included. A
+warp-shuffle reduction was implemented and measured at 0.48–0.56× the speed of
+the fixed-tree kernel, so it does not ship; the deterministic tree is the only
+reduction path. Remaining open items are recorded in `docs/Checkpoint.md`.
 
 ## Contents
 
