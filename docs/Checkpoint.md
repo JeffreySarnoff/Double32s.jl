@@ -1534,6 +1534,16 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
 - device throughput of the rebuilt elementary functions unmeasured: the
   exp/log tables are dynamically indexed tuples, which compile on GPU but may
   spill to local memory (§20.6 records the trade)
+- **display is context-dependent and no decision has been made about it.**
+  Array display renders elements through the three-argument `show` and prints
+  decimals; tuples, `Dict` values, `string`, and `$` interpolation take the
+  two-argument form and print pairs. This is Base's own split, not a defect,
+  but `"$x"` yielding `Double32(0.33333334f0, -9.934108f-9)` inside a sentence
+  reads badly. `Base.print(io, ::Double32)` emitting the decimal would fix
+  interpolation while leaving `repr` and the §11.5 round-trip contract intact
+  — the same separation Base uses for `Char`. Left to the author; the
+  getting-started guide documents the behavior as it stands.
+- CI builds the documentation twice per push (see Git state below)
 
 Closed 2026-07-29 (entry below; details in `UseFableHere.md` Tier 4): the
 JMP/Muller–Rideau page references, both foreign-type extensions, and the
@@ -1545,7 +1555,21 @@ three-argument decimal `show` + `parse`. Closing them also fixed
 First commit landed 2026-07-29 00:57 EDT at user request: `e92076e`
 ("Complete Double32 package: scalar core, elementary functions, GPU layer",
 76 files, 19,721 insertions — the entire package as of the elementary-function
-rebuild). Not pushed; no remote interaction has been requested.
+rebuild).
+
+Now published at `github.com:JeffreySarnoff/Double32s.jl`, branch `main`,
+pushed through `bf8d011`. Later commits, oldest first: compat bounds tightened
+(AMDGPU 2, CUDA 6; AK and KA ranges widened) with the matching Manifest
+rehash; a standalone `Documentation.yml` workflow added and the CI matrix
+trimmed to Julia 1.12; README installation instructions (unregistered
+package); Tier 4 closure (`bf8d011`); the documentation language pass
+(`c47060c`, unpushed at the time of writing).
+
+**`.github/workflows/CI.yml` still contains its own docs job**, so every push
+to `main` builds the documentation twice — once there and once in
+`Documentation.yml`. Harmless but wasteful; removing the CI copy is the fix.
+Dependabot has opened three action-bump branches (`checkout-7`,
+`codecov-action-7`, `cache-3`) that are unreviewed.
 
 ---
 
@@ -1841,3 +1865,81 @@ and Tier 2.1.
   `test/foreign.jl`, `test/core/decimal.jl`, `Double32s.to_odd_hi`,
   `Double32s.decimal`, `Base.parse`/`tryparse`, 3-arg `show`.
 - Snapshot updated in place.
+
+---
+
+## Documentation language pass — 2026-07-29
+
+Requested: review the docs and rewrite where the language is not professional;
+extended mid-pass to section and subsection titles, which were to be crisp,
+clear, and technical where appropriate.
+
+### Language and structure
+
+Removed the informal and self-referential register: "This is the page the
+package exists for", "That is the whole install", "Speed is a wash", the table
+row "benchmarks disagree with this table | believe the benchmarks",
+`Float64 WINS`, scare-quoted `"optimize"`, "it gives you a `Float32` wearing
+two words", and contractions throughout. Titles rewritten as descriptions of
+content rather than as conversation — "The portable spelling:" →
+"Backend-portable reductions: `sum(Double32, A)`"; "Probe the device — don't
+assume" → "Probe the device rather than assume its capabilities"; "Why this
+exists" → "Why a double-word `Float32`"; "Memory layout: one array or two" →
+"Memory layout: array-of-structs or split words"; and similar on every page.
+No measured number changed.
+
+### Errors found by reading, which outnumbered the style problems
+
+- **`index.md` gave an installation command that fails.** `pkg> add Double32s`
+  on an unregistered package. Now the repository URL, matching the README and
+  the getting-started page.
+- **Two pages still called design phases 3–5 roadmap.** They closed in the
+  Phase 3–5 entries above. Both now state the measured outcomes, including the
+  two rejections, rather than promising the work.
+- **The GPU guide compared `sum(Double32, A)` against itself.** Root cause was
+  not in the guide: the `ak_` prefix removal had collapsed four rows of
+  `gpu_report.jl` into two duplicated labels, so the *report* no longer
+  identified which call each timing belonged to. Generator and report
+  relabeled (labels only — no measurement was re-run or altered), and the
+  guide now cites the unambiguous pair, 0.403 ms for `sum(Double32, Ad)`
+  against 0.433 ms for `sum(Ad)`. A rename that silently merges two labels in
+  a generated artifact is the same defect family as §14.3 folklore: the
+  document kept asserting something after the thing it described had changed.
+- **`basic.md` still said the printed form shows both words** — untrue since
+  the decimal `show` landed hours earlier in the same session.
+- **Two unchecked ```julia blocks held stale output**, and the
+  `rand(MersenneTwister(1), Double32, 3)` values in one were simply wrong.
+  Both are now `jldoctest`, so the build checks them. General rule this
+  reinforces: an example that can run under the doctester should not be a
+  plain code block.
+- Assertion count 2.5M → 2.66M.
+
+### Display defect fixed (introduced by the previous entry)
+
+`log2(Double32(1024))` printed `1e+01`. `%g` switches to exponential as soon
+as the decimal exponent reaches the requested digit count, so the shortest
+round-tripping rendering of ten was the exponential one, and the round-trip
+check accepted it because it *does* round-trip. Rendering now selects
+positional or exponential from magnitude alone (`-5 < e < 16` positional) and
+always leaves a visible fractional part, following Julia's convention for
+`Float64`. Verified across magnitudes from `2^-149` to `floatmax`, and the
+round-trip property is unchanged — it is checked on the rendered string.
+
+Note for the next author: `_render` calls `Base.split`, spelled out, because
+the package's own `split` (SplitDouble32Array) shadows the name inside the
+module.
+
+### Documentation gaps from the Tier 4 commit
+
+`decimal`, `parse`/`tryparse`, `to_odd_hi`, and both new extensions were
+implemented, tested, and documented nowhere. Added: a "Display and parsing"
+section and a "Conversions to other float types" table in `reference/api.md`,
+`to_odd_hi` in `reference/internals.md`, and extension rows in the landing
+page's activation table. `decimal` is now `public`.
+
+### State
+
+- Docs build exit 0, doctests green; `Pkg.test()` 2,662,749 assertions, 53.4 s.
+- Committed `c47060c` (16 files, +273/−174). `bf8d011` and earlier are pushed.
+- Snapshot updated in place: open items gained the display-context question and
+  the duplicated docs build; Git state now records the remote.
