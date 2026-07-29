@@ -67,6 +67,6 @@ jobs:
         shell: julia --project=docs --color=yes {0}
         run: |
           using Documenter: DocMeta, doctest
-          using Double32
-          DocMeta.setdocmeta!(Double32, :DocTestSetup, :(using Double32); recursive=true)
-          doctest(Double32)
+          using Double32s
+          DocMeta.setdocmeta!(Double32s, :DocTestSetup, :(using Double32s); recursive=true)
+          doctest(Double32s)
