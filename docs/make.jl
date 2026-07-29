@@ -24,7 +24,7 @@ makedocs(;
         # Keep them for CI deployment only; a local build emits `page.html`
         # so every link resolves immediately.
         prettyurls=get(ENV, "CI", nothing) == "true",
-        canonical="https://JeffreySarnoff.github.io/Double32.jl",
+        canonical="https://JeffreySarnoff.github.io/Double32s.jl",
         edit_link="main",
         assets=String[],
     ),
@@ -52,6 +52,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/JeffreySarnoff/Double32.jl",
+    repo="github.com/JeffreySarnoff/Double32s.jl",
     devbranch="main",
 )
