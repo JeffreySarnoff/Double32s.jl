@@ -21,8 +21,9 @@ would give:
   infinite `hi`;
 - when both words are zero the sign of `hi` is preserved, rather than taking
   IEEE's `(-0.0f0) + (+0.0f0) == +0.0f0`. This is what makes
-  `Double32(x.hi, x.lo) === x` hold for every canonical `x`, which design
-  section 11.5 requires of two-argument `show`.
+  `Double32(x.hi, x.lo) === x` hold for every canonical `x`, so a value can
+  always be rebuilt from [`Double32s.HILO`](@ref) without losing the sign of
+  a zero.
 
 **This is also the byte-level normal form.** A zero low word always comes back
 `+0.0f0`, so two pairs that are `isequal` — which, by design section 5.2

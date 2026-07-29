@@ -128,7 +128,7 @@ call site, not ours. Three names in early drafts of this design are unsafe:
 | Draft export | Problem | Resolution |
 |---|---|---|
 | `normalize` | collides with `LinearAlgebra.normalize`, which almost every numerical user has loaded | rename to `canonicalize` |
-| `hi`, `lo` | extremely common local-variable and field names; also shadowed constantly in user code | do not export; provide as documented module-qualified accessors |
+| `hi`, `lo` | extremely common local-variable and field names; also shadowed constantly in user code | **export `HI`/`LO`/`HILO` instead** — capitalized, matching `DoubleFloats.jl`; the lowercase spellings are not defined at all (revised 2026-07-29) |
 | `components` | vague, and no Base precedent | do not export; provide `words(x)` returning a `Tuple{Float32,Float32}` |
 
 Julia 1.11 added the `public` keyword, which marks a name as documented API
@@ -137,15 +137,38 @@ correct tool:
 
 ```julia
 export Double32
+export HI, LO, HILO, canonicalize, isnormal
+export add, sub, mul, divide, reciprocal, rsqrt
+export compensated_dot, compensated_mapreduce, compensated_sum, compensated_norm2
+export norm2, matmul, matmul!
 
-public hi, lo, words, canonicalize
 public StrictPolicy, NativePolicy, FastPolicy
-public compensated_sum, compensated_dot
-public nominal_eps, unit_roundoff
+public nominal_eps, unit_roundoff, decimal
 ```
 
-One exported name is the goal. Everything else is reached as
-`Double32s.canonicalize`, which reads well and never collides.
+**Revised 2026-07-29.** The original goal was one exported name, everything
+else module-qualified. That was relaxed for the operations a user calls by
+name — the word accessors, the named arithmetic, and the routines with no
+`Base` generic to extend (`norm2`, `matmul`, `matmul!`). The rule that
+survives is the one above it: *evaluate each export against the namespaces it
+will land in.*
+
+Two exports do collide, both knowingly:
+
+| exported name | collides with | consequence |
+|---|---|---|
+| `canonicalize` | `Dates.canonicalize` (stdlib, widely loaded) | `using Dates, Double32s` makes the bare name an error until disambiguated |
+| `HI`, `LO`, `HILO` | `DoubleFloats.jl`, which exports the same three | same, and this package ships an extension *for* `DoubleFloats`, so both loaded is a supported configuration |
+
+The `HI`/`LO`/`HILO` collision is accepted deliberately: naming the same
+operation the same way as `DoubleFloats.jl` is worth more than avoiding the
+ambiguity, and the resolution is one explicit import. It is recorded rather
+than discovered later.
+
+This is the same shape as the constraint in section 1.3 above — the package's
+own `Double32` collides with `DoubleFloats.Double32` for exactly the same
+reason. A name that must be qualified when two packages are loaded is a cost
+paid by the user, so it belongs in the design record, not in an issue tracker.
 
 ---
 
@@ -2558,24 +2581,99 @@ package does add complex kernels later, add them as methods on
 
 ### 11.5 `show` and parsing
 
-Initial `show` displays the exact pair, and the two-argument method must produce
-output that parses back to the same value — that is Base's contract for
-two-argument `show`, and the pair form satisfies it:
+**Revised 2026-07-29; the original rule is kept below because it was followed,
+shipped, and then reversed on evidence.**
+
+Define exactly one rendering, on the two-argument `show`: the shortest decimal
+that reconstructs the value under `parse`.
 
 ```julia
-Base.show(io::IO, x::Double32) = print(io, "Double32(", x.hi, ", ", x.lo, ")")
+Base.show(io::IO, x::Double32) = print(io, decimal(x))
 ```
 
 ```text
-julia> Double32(1.0f0) / 3
-Double32(0.33333334f0, -9.934107f-9)
+julia> sqrt(Double32(5))
+2.23606797749979
 ```
 
-Do not define a three-argument `show(io, ::MIME"text/plain", x)` yet. Base's
-fallback routes it to the two-argument method, which is the desired behavior
-until a decimal rendering exists.
+`decimal(x)` searches significant-digit counts upward and **verifies the round
+trip before returning** — `isequal(parse(Double32, s), x)` — so the promise is
+checked per value rather than argued from a digit count. Positional or
+exponential form is chosen from the magnitude alone, never by `%g`'s rule,
+which switches as soon as the decimal exponent reaches the digit count and
+would render ten as `1e+01`.
 
-A decimal rendering that promises round-trip reconstruction should be deferred; when it arrives it belongs in the three-argument method, with the pair form retained for two-argument `show` and for `repr`. Parsing should initially route through `BigFloat` on the host, never in device code.
+**The reconstruction contract is `parse`, not `eval`.** `eval(Meta.parse(repr(x)))`
+yields a `Float64`, because a bare decimal is `Float64` literal syntax and no
+method on `Double32` changes what the parser makes of that token. This is
+`BigFloat`'s arrangement exactly — verified: `eval(Meta.parse(repr(big"0.1")))`
+is a `Float64` unequal to the original, while `parse(BigFloat, repr(b)) == b`.
+A type that prints a bare decimal cannot do better, and Base ships one that
+does not.
+
+Do **not** define a three-argument `show(io, ::MIME"text/plain", x)`. With a
+single two-argument method the Base fallback routes the MIME to it, and every
+display path agrees.
+
+#### Why the original rule was reversed
+
+The original text (retained verbatim below) called for the pair form on
+two-argument `show`, with a decimal deferred to a three-argument method. Both
+halves were implemented. The result was that **the rendering depended on the
+container**, because Base does not route the MIME uniformly:
+
+| expression | printed | why |
+|---|---|---|
+| `x` | `2.23606797749979` | REPL calls the three-argument method |
+| `[x]` | `2.23606797749979` | array printing tries three-argument first, falling back only on a newline (`arrayshow.jl`) |
+| `(x,)` | `Double32(2.236068f0, -3.283041f-8)` | `Tuple` has no three-argument method; the generic fallback discards the MIME |
+| `string(x)`, `"$x"`, `Dict` values | `Double32(...)` | all two-argument paths |
+
+It also degraded numeric alignment: `Base.alignment(::IO, ::Real)` measures
+`sprint(show, x)` and splits it at the first `.`, `e`, or `f`. Under the pair
+form that split landed inside the high word of `Double32(2.236068f0, …)`, so
+the computed column widths described text that was never printed and
+`Vector{Double32}` lost the decimal-point alignment that `Vector{Float64}`
+has.
+
+The tradeoff is therefore not "pair versus decimal in two places" — Base ties
+`repr` and container-element display to one method, so there is one string
+serving both roles. Choosing the pair buys `eval` round-tripping and pays with
+container-dependent output and broken alignment; choosing the decimal pays the
+`eval` round trip, which `BigFloat` also declines to offer, and buys
+consistency everywhere.
+
+The representation stays reachable through `words(x)`, which is public and
+returns the two `Float32` words.
+
+#### Original rule, superseded
+
+> Initial `show` displays the exact pair, and the two-argument method must
+> produce output that parses back to the same value — that is Base's contract
+> for two-argument `show`, and the pair form satisfies it:
+>
+> ```julia
+> Base.show(io::IO, x::Double32) = print(io, "Double32(", x.hi, ", ", x.lo, ")")
+> ```
+>
+> Do not define a three-argument `show(io, ::MIME"text/plain", x)` yet. Base's
+> fallback routes it to the two-argument method, which is the desired behavior
+> until a decimal rendering exists. A decimal rendering that promises
+> round-trip reconstruction should be deferred; when it arrives it belongs in
+> the three-argument method, with the pair form retained for two-argument
+> `show` and for `repr`.
+
+Parsing routes through `BigFloat` on the host, never in device code.
+
+#### The sign of a zero low word
+
+The rendering is computed from the represented value, so a `-0.0f0` low word
+never appears — which is required, not incidental. Invariant 8 of section 5.2
+makes that sign non-information, and a bit-pattern-dependent rendering would
+give `isequal(a, b)` with `repr(a) != repr(b)`. Measured over the signed-zero
+surface of section 23.12: **18 disagreements across its 36 `isequal` pairs
+under a raw-field rendering; 0 under the value-based one.** A zero *high* word
+keeps its sign, because there it is the value's own.
 
 ---
 

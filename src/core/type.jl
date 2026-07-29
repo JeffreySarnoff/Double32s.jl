@@ -55,23 +55,31 @@ Internal; use [`canonicalize`](@ref) or the `Double32` constructor instead.
 @inline raw(hi::Float32, lo::Float32) = Double32(Raw(), hi, lo)
 
 """
-    Double32s.hi(x::Double32) -> Float32
+    HI(x::Double32) -> Float32
 
-High word of `x`. Not exported: `hi` is too common a local name.
-"""
-@inline hi(x::Double32) = x.hi
+High word of `x`: the nearest `Float32` to the represented value, by canonical
+invariant 3 of design section 5.2.
 
+Exported, and capitalized to match `DoubleFloats.jl`, where `HI`/`LO`/`HILO`
+name the same accessors. The lowercase spellings are deliberately not used:
+`hi` and `lo` are too common as local names to inject into a user's namespace.
 """
-    Double32s.lo(x::Double32) -> Float32
-
-Low word of `x`. Not exported: `lo` is too common a local name.
-"""
-@inline lo(x::Double32) = x.lo
+@inline HI(x::Double32) = x.hi
 
 """
-    Double32s.words(x::Double32) -> Tuple{Float32,Float32}
+    LO(x::Double32) -> Float32
 
-Both words as a tuple. This is the layer-1/layer-2 adapter of design section
-8.0 and compiles away entirely.
+Low word of `x`, carrying what the high word cannot represent. See [`HI`](@ref).
 """
-@inline words(x::Double32) = (x.hi, x.lo)
+@inline LO(x::Double32) = x.lo
+
+"""
+    HILO(x::Double32) -> Tuple{Float32,Float32}
+
+Both words as a tuple, high first. This is the layer-1/layer-2 adapter of
+design section 8.0 and compiles away entirely.
+
+`Double32(HILO(x)...) === x` for every canonical `x`, the sign of a zero
+included — see [`canonicalize`](@ref).
+"""
+@inline HILO(x::Double32) = (x.hi, x.lo)

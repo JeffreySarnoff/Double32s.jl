@@ -128,17 +128,35 @@ are deliberately not implemented. Two consequences worth knowing:
 
 ## API
 
-One exported name, `Double32`. Everything else is `public` and reached as
-`Double32s.name`:
+`using Double32s` exports:
 
 ```
-hi, lo, words, canonicalize, isnormal, reference, float64_reference_is_exact
+Double32
+HI, LO, HILO, canonicalize, isnormal
+add, sub, mul, divide, reciprocal, rsqrt
+compensated_dot, compensated_mapreduce, compensated_sum, compensated_norm2
+norm2, matmul, matmul!
+```
+
+Everything else is `public` and reached as `Double32s.name`:
+
+```
+decimal, reference, float64_reference_is_exact, nominal_eps, unit_roundoff
 StrictPolicy, NativePolicy, FastPolicy, DEFAULT_POLICY
-add, sub, mul, divide, reciprocal, square_root, sqrt_or_nan, compensated_fma
-nominal_eps, unit_roundoff
+square_root, sqrt_or_nan, compensated_fma
 SplitDouble32Array, split, unsplit
-compensated_dot, compensated_sum, compensated_mapreduce
 EFT.two_sum, EFT.two_prod, …
+```
+
+Two exported names collide with other packages, and Julia will not choose for
+you: `canonicalize` is also exported by the `Dates` stdlib, and `HI`, `LO`,
+`HILO` are also exported by `DoubleFloats.jl` (deliberately the same spelling
+— they name the same operation). With both loaded, disambiguate with an
+explicit import on its own line:
+
+```julia
+using Dates
+using Double32s: canonicalize
 ```
 
 Use `Double32s.sqrt_or_nan` rather than `Base.sqrt` inside kernels: `sqrt`

@@ -15,7 +15,11 @@ Pkg.add(url = "https://github.com/JeffreySarnoff/Double32s.jl")
 using Double32s
 ```
 
-`Double32` is the only exported name.
+Besides `Double32`, `using Double32s` exports the word accessors `HI`, `LO`,
+`HILO`, plus `canonicalize`, `isnormal`, the named arithmetic (`add`, `sub`,
+`mul`, `divide`, `reciprocal`, `rsqrt`), the compensated reductions, and
+`norm2`, `matmul`, `matmul!`. See [Public API](@ref api-surface) for the full
+list and for the two names that collide with other packages.
 
 ## Constructing values
 
@@ -48,42 +52,40 @@ julia> Double32(1.0f0, 0.5f0)             # overlapping words: renormalized
 
 ## Display and parsing
 
-A `Double32` displays at the REPL as a decimal: the shortest string that parses
-back to the identical value under `parse(Double32, s)`. The round trip is
-verified for that value before the string is printed, rather than inferred from
-a digit count.
+A `Double32` displays as a decimal: the shortest string that reconstructs the
+identical value under `parse(Double32, s)`. The round trip is verified for that
+value before the string is printed, rather than inferred from a digit count.
 
-The pair remains available through `repr`, which is the two-argument `show`:
+There is only one rendering, so every display path agrees — the REPL, arrays,
+tuples, `Dict` values, `string`, and `$` interpolation:
 
 ```jldoctest
-julia> Double32(1.0f0) / 3                # decimal rendering
-0.333333333333333
+julia> x = sqrt(Double32(5))
+2.23606797749979
 
-julia> repr(Double32(1.0f0) / 3)          # the underlying representation
-"Double32(0.33333334f0, -9.934108f-9)"
+julia> (x, x)
+(2.23606797749979, 2.23606797749979)
 
-julia> parse(Double32, "0.333333333333333") === Double32(1.0f0) / 3
+julia> "the root is $x"
+"the root is 2.23606797749979"
+
+julia> parse(Double32, repr(x)) === x     # exact reconstruction
 true
 ```
 
-Both renderings satisfy Base's round-trip contract, by different routes: the
-pair form is a constructor call that evaluates back to the value, and the
-decimal form parses back to it under `parse`.
-
-Which of the two appears follows Base's usual rule, so it depends on the
-context rather than on this package: array display renders each element
-through the three-argument `show` and prints decimals, while tuples, `Dict`
-values, `string`, and `$` interpolation all use the two-argument form and
-print pairs.
+Use [`Double32s.HILO`](@ref) to see the representation behind the value:
 
 ```jldoctest
-julia> [Double32(1.0f0) / 3]              # array display: decimal
-1-element Vector{Double32}:
- 0.333333333333333
-
-julia> (Double32(1.0f0) / 3,)             # tuple display: the pair
-(Double32(0.33333334f0, -9.934108f-9),)
+julia> Double32s.HILO(sqrt(Double32(5)))
+(2.236068f0, -3.283041f-8)
 ```
+
+!!! note "Reconstruction is `parse`, not `eval`"
+    `eval(Meta.parse(repr(x)))` returns a `Float64`, because a bare decimal is
+    `Float64` literal syntax and nothing about a type changes what the parser
+    makes of that token. `parse(Double32, repr(x))` returns the `Double32`.
+    `BigFloat` behaves the same way: `repr(big"0.1")` also evaluates to a
+    `Float64`, and also reconstructs exactly through `parse`.
 
 A decimal may be long. `Double32(1.0f-7)` prints 39 significant digits, because
 the pair lattice is fine enough that no shorter decimal identifies that exact
@@ -178,7 +180,7 @@ julia> floatmax(Double32)
 3.40282356779733e38
 
 julia> typemax(Double32), typemin(Double32)
-(Double32(Inf32, 0.0f0), Double32(-Inf32, 0.0f0))
+(Inf, -Inf)
 ```
 
 !!! warning "`eps` is nominal, not adjacency"
@@ -204,6 +206,6 @@ julia> v = rand(MersenneTwister(1), Double32, 3)
  0.968355522079257
  0.68204096259782
 
-julia> repr(v[1])                         # the low word is not zero
-"Double32(0.5679053f0, 2.2784235f-8)"
+julia> Double32s.HILO(v[1])              # the low word is not zero
+(0.5679053f0, 2.2784235f-8)
 ```

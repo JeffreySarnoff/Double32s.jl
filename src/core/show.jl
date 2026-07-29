@@ -1,59 +1,29 @@
 # core/show.jl — display and parsing.
 #
-# Design section 11.5. Two-argument `show` must produce output that parses back
-# to the same value; the three-argument `show(io, ::MIME"text/plain", x)`
-# renders a decimal with a per-value round-trip guarantee: the printed string
-# is the shortest one whose `parse(Double32, ·)` is `isequal` to `x`, checked
-# before printing rather than promised by analysis. Parsing routes through
-# `BigFloat` on the host and never appears in device code.
-
-"""
-    show(io::IO, x::Double32)
-
-Print the pair form, `Double32(hi, lo)`, which parses back to a value `isequal`
-to `x`.
-
-**A zero low word always prints as `0.0f0`,** whatever sign bit it carries.
-Design section 5.2 invariant 8 makes the sign of a zero `lo` non-information:
-`-` flips it unconditionally, so `-one(Double32)` and `Double32(-1.0f0)` are
-bit-distinct pairs holding one value, and `isequal` deliberately does not
-distinguish them.
-
-Printing the raw sign would make `repr` a function of the *bit pattern* rather
-than of the *value*, giving `isequal(a, b)` while `repr(a) != repr(b)` — the
-same shape of defect as the section 8.10 comparison bug. Measured before this
-normalization: **18 disagreements over the 36 `isequal` pairs of the signed-zero
-surface; after, 0.**
-
-The sign of a zero *high* word is untouched, because there it is the value's own
-sign: `NEG_ZERO` still prints `Double32(-0.0f0, 0.0f0)` and still parses back to
-itself.
-
-Nothing diagnostic is hidden — a `-0.0` low word is never a defect — and the
-fields stay reachable for anyone inspecting representation rather than value.
-
-# Examples
-```jldoctest
-julia> -one(Double32)                      # low word is -0.0f0 internally
--1.0
-
-julia> repr(-one(Double32)) == repr(Double32(-1.0f0))
-true
-
-julia> Double32s.NEG_ZERO                  # a zero *high* word keeps its sign
--0.0
-```
-"""
-function Base.show(io::IO, x::Double32)
-    print(io, "Double32(")
-    show(io, x.hi)
-    print(io, ", ")
-    # `iszero` and not `== 0.0f0 && !signbit`: this must fire for +0.0 too, so
-    # that the printed form depends on nothing but the represented value.
-    show(io, iszero(x.lo) ? 0.0f0 : x.lo)
-    print(io, ")")
-    return nothing
-end
+# Design section 11.5. There is exactly **one** rendering: the shortest decimal
+# that parses back to the same value. It is produced by the two-argument
+# `show`, so every display path in Base agrees — the REPL, array elements,
+# tuples, `Dict` values, `string`, and `$` interpolation.
+#
+# The reconstruction contract is `parse`, not `eval`. This is `BigFloat`'s
+# arrangement: `repr(big"0.1")` evaluates to a `Float64`, while
+# `parse(BigFloat, repr(b))` returns `b` exactly. A bare decimal cannot do
+# better for any type, because `2.23606797749979` is `Float64` literal syntax
+# and no method on `Double32` changes what the parser makes of it.
+#
+# The earlier arrangement — pair form on two-argument `show`, decimal on a
+# three-argument method — is recorded here because it was deliberate and was
+# reversed for a reason. It made the rendering depend on the container:
+# `[x]` printed a decimal (Base's array code tries the three-argument form
+# first), while `(x,)`, `string(x)`, and `"$x"` printed
+# `Double32(2.236068f0, -3.283041f-8)`, since `Tuple` has no three-argument
+# method and the generic fallback discards the MIME. It also broke numeric
+# column alignment: `Base.alignment(::IO, ::Real)` measures
+# `sprint(show, x)` and splits it at the first `.`, which under the pair form
+# landed inside the high word and described text that was never printed.
+#
+# Parsing routes through `BigFloat` on the host and never appears in device
+# code.
 
 # Working precision for parsing and decimal rendering. A canonical pair spans
 # at most `exponent(floatmax(Float32)) - exponent(2f0^-149) + 1 = 277` bits
@@ -97,14 +67,40 @@ end
 """
     Double32s.decimal(x::Double32) -> String
 
-The shortest decimal string `s` (by significant-digit count, `%.Ng`
-formatting) with `isequal(parse(Double32, s), x)` — verified by parsing back
-before returning, not promised by digit-count analysis. Wide-gap pairs
-(design section 23.11) genuinely need up to ~90 significant digits: a high
-word near `floatmax(Float32)` above a subnormal low word pins ~277 bits.
+The shortest decimal string `s` with `isequal(parse(Double32, s), x)` —
+verified by parsing back before returning, not promised by digit-count
+analysis. This is what `show`, `repr`, `string`, and interpolation all print.
+
+A short decimal is not always available, and the length is not slack. Wide-gap
+pairs (design section 23.11) need up to ~90 significant digits, because a high
+word near `floatmax(Float32)` above a subnormal low word pins ~277 bits. Even
+a pair whose low word is zero can be long: `Double32(1.0f-7)` needs 39 digits,
+since the pair lattice is fine enough that no shorter decimal selects that
+exact value over its neighbors.
 
 The 97-digit fallback is unreachable — 97 digits over-determine 384 bits —
-and asserted rather than silently trusted.
+and is asserted rather than silently trusted.
+
+The sign of a zero low word never appears, because the rendering is computed
+from the represented value. Design section 5.2 invariant 8 makes that sign
+non-information: `-` flips it unconditionally, so `-one(Double32)` and
+`Double32(-1.0f0)` are bit-distinct pairs holding one value. A rendering that
+exposed the sign would make `repr` a function of the bit pattern rather than
+of the value, giving `isequal(a, b)` while `repr(a) != repr(b)`. Measured
+against the signed-zero surface before the value-based rendering existed:
+**18 disagreements over its 36 `isequal` pairs; now 0.** The sign of a zero
+*high* word does appear, because there it is the value's own sign.
+
+Use [`Double32s.HILO`](@ref) to inspect the representation.
+
+# Examples
+```jldoctest
+julia> Double32s.decimal(sqrt(Double32(5)))
+"2.23606797749979"
+
+julia> Double32s.HILO(sqrt(Double32(5)))         # the representation
+(2.236068f0, -3.283041f-8)
+```
 """
 function decimal(x::Double32)
     isnan(x.hi) && return "NaN"
@@ -145,24 +141,40 @@ function _render(v::BigFloat, k::Int)
 end
 
 """
-    show(io::IO, ::MIME"text/plain", x::Double32)
+    show(io::IO, x::Double32)
 
-Decimal rendering with a round-trip promise: the printed string parses back —
-`isequal(parse(Double32, string), x)` — because [`Double32s.decimal`](@ref)
-verifies exactly that before returning. The pair form remains the two-argument
-`show` and `repr`, following `BigFloat`'s precedent of a bare decimal at the
-REPL.
+Print [`Double32s.decimal`](@ref): the shortest decimal that reconstructs `x`
+under `parse(Double32, ·)`, verified for this value before printing.
+
+This is the only rendering the type defines, so every Base display path agrees
+— the REPL, array elements, tuples, `Dict` values, `string`, and `\$`
+interpolation.
+
+!!! note "The round trip is `parse`, not `eval`"
+    `eval(Meta.parse(repr(x)))` yields a `Float64`, because a bare decimal is
+    `Float64` literal syntax. `parse(Double32, repr(x))` returns `x`. This is
+    exactly `BigFloat`'s arrangement, and it is not avoidable for any type
+    that prints a bare decimal.
 
 # Examples
 ```jldoctest
-julia> Double32(1.0f0) / 3
-0.333333333333333
+julia> x = sqrt(Double32(5))
+2.23606797749979
 
-julia> parse(Double32, "0.33333333333333331483") === Double32(1.0f0) / 3
+julia> (x,)                                # containers agree with the scalar
+(2.23606797749979,)
+
+julia> parse(Double32, repr(x)) === x      # exact reconstruction
 true
 
-julia> repr(Double32(1.0f0) / 3)
-"Double32(0.33333334f0, -9.934108f-9)"
+julia> -one(Double32)                      # low word is -0.0f0 internally
+-1.0
+
+julia> repr(-one(Double32)) == repr(Double32(-1.0f0))
+true
+
+julia> Double32s.NEG_ZERO                  # a zero *high* word keeps its sign
+-0.0
 ```
 """
-Base.show(io::IO, ::MIME"text/plain", x::Double32) = print(io, decimal(x))
+Base.show(io::IO, x::Double32) = print(io, decimal(x))

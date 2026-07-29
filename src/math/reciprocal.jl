@@ -21,7 +21,7 @@ the documented precision taper of design section 5.5, not a defect.
     (isfinite(y.hi) & !iszero(y.hi)) || return canonical_nonfinite(inv(y.hi))
     k  = max(0, INV_SCALE_FLOOR - raw_exponent(y.hi))
     ys = scale2(y, k)                      # exact: scaling up never underflows
-    h, l = inv_dd_(words(ys))
+    h, l = inv_dd_(HILO(ys))
     isfinite(h) || return canonical_nonfinite(h)
     iszero(k) && return raw(h, l)          # the common case pays nothing
     return ldexp(raw(h, l), k)             # guarded: may overflow

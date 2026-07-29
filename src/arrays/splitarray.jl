@@ -105,7 +105,7 @@ Backend generic: the two word arrays are produced by broadcasting, so a
 `CuArray{Double32}` splits into two `CuArray{Float32}` on the device with no
 host round trip and no scalar indexing.
 """
-split(A::AbstractArray{Double32}) = SplitDouble32Array(Raw(), hi.(A), lo.(A))
+split(A::AbstractArray{Double32}) = SplitDouble32Array(Raw(), HI.(A), LO.(A))
 
 """
     Double32s.unsplit(A::SplitDouble32Array) -> AbstractArray{Double32}
@@ -139,8 +139,8 @@ true
 function split!(S::SplitDouble32Array, A::AbstractArray{Double32})
     axes(S) == axes(A) || throw(DimensionMismatch(
         lazy"destination has axes $(axes(S)) but source has axes $(axes(A))"))
-    S.hi .= hi.(A)
-    S.lo .= lo.(A)
+    S.hi .= HI.(A)
+    S.lo .= LO.(A)
     return S
 end
 

@@ -71,7 +71,7 @@ word_is_normal(f::Float32) = !iszero(f) && abs(f) >= floatmin(Float32)
 
         # A zero *high* word keeps its sign: there it is the value's own sign.
         @test repr(NEG_ZERO) != repr(POS_ZERO)
-        @test repr(NEG_ZERO) == "Double32(-0.0f0, 0.0f0)"
+        @test repr(NEG_ZERO) == "-0.0"
 
         # Collections agree with `isequal` rather than with the bit pattern.
         @test length(Set(S)) == length(unique(S))
@@ -111,11 +111,11 @@ word_is_normal(f::Float32) = !iszero(f) && abs(f) >= floatmin(Float32)
             ok &= canon(t)
         end
         for a in pool
-            tally(inv_dd_(words(a)))
-            a.hi >= 0 && tally(sqrt_dd_(words(a)))
+            tally(inv_dd_(HILO(a)))
+            a.hi >= 0 && tally(sqrt_dd_(HILO(a)))
         end
         for a in pool, b in pool
-            wa, wb = words(a), words(b)
+            wa, wb = HILO(a), HILO(b)
             tally(add_dd_(wa, wb)); tally(add_dd_fast_(wa, wb))
             tally(sub_dd_(wa, wb)); tally(sub_dd_fast_(wa, wb))
             tally(mul_dd_(wa, wb)); tally(mul_dd_fast_(wa, wb))
@@ -123,7 +123,7 @@ word_is_normal(f::Float32) = !iszero(f) && abs(f) >= floatmin(Float32)
         end
         sp = pool[1:16:end]
         for a in sp, b in sp, c in sp
-            tally(fma_dd_(words(a), words(b), words(c)))
+            tally(fma_dd_(HILO(a), HILO(b), HILO(c)))
         end
         @test checked > 500_000
         @test ok

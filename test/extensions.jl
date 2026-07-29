@@ -160,8 +160,8 @@ const KA = KernelAbstractions
             @test all(Array(Double32s.unsplit(S)) .=== x)
 
             Sk = Double32s.allocate_split(CUDABackend(), length(x))
-            copyto!(Sk.hi, Double32s.hi.(x))
-            copyto!(Sk.lo, Double32s.lo.(x))
+            copyto!(Sk.hi, Double32s.HI.(x))
+            copyto!(Sk.lo, Double32s.LO.(x))
             @test all(Array(Double32s.unsplit(Sk)) .=== x)
             @test KA.get_backend(Sk) isa CUDABackend
         end

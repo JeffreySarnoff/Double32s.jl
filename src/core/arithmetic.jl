@@ -344,25 +344,25 @@ the `iszero(reference)` conjunct was added.
     ifelse(iszero(h) & iszero(reference), reference, h)
 
 @inline function add(::StrictPolicy, x::Double32, y::Double32)
-    h, l = add_dd_(words(x), words(y))
+    h, l = add_dd_(HILO(x), HILO(y))
     isfinite(h) || return add_nonfinite(x, y)
     return raw(zero_sign(h, x.hi + y.hi), l)
 end
 
 @inline function add(::Union{NativePolicy,FastPolicy}, x::Double32, y::Double32)
-    h, l = add_dd_fast_(words(x), words(y))
+    h, l = add_dd_fast_(HILO(x), HILO(y))
     isfinite(h) || return add_nonfinite(x, y)
     return raw(zero_sign(h, x.hi + y.hi), l)
 end
 
 @inline function sub(::StrictPolicy, x::Double32, y::Double32)
-    h, l = sub_dd_(words(x), words(y))
+    h, l = sub_dd_(HILO(x), HILO(y))
     isfinite(h) || return sub_nonfinite(x, y)
     return raw(zero_sign(h, x.hi - y.hi), l)
 end
 
 @inline function sub(::Union{NativePolicy,FastPolicy}, x::Double32, y::Double32)
-    h, l = sub_dd_fast_(words(x), words(y))
+    h, l = sub_dd_fast_(HILO(x), HILO(y))
     isfinite(h) || return sub_nonfinite(x, y)
     return raw(zero_sign(h, x.hi - y.hi), l)
 end
@@ -404,13 +404,13 @@ end
 @inline mul_in_range(h::Float32) = (abs(h) >= MUL_TINY) & (abs(h) < Inf32)
 
 @inline function mul(p::StrictPolicy, x::Double32, y::Double32)
-    h, l = mul_dd_(words(x), words(y))
+    h, l = mul_dd_(HILO(x), HILO(y))
     mul_in_range(h) || return mul_guarded(p, x, y)
     return raw(h, l)
 end
 
 @inline function mul(p::Union{NativePolicy,FastPolicy}, x::Double32, y::Double32)
-    h, l = mul_dd_fast_(words(x), words(y))
+    h, l = mul_dd_fast_(HILO(x), HILO(y))
     mul_in_range(h) || return mul_guarded(p, x, y)
     return raw(h, l)
 end
@@ -478,7 +478,7 @@ regression is in `test/core/arithmetic.jl`.
     k  = ifelse(es >= 0, -RESCUE_SHIFT, RESCUE_SHIFT)
     xs = ldexp(x, k)
     ys = ldexp(y, k)
-    h, l = mul_kernel(p, words(xs), words(ys))
+    h, l = mul_kernel(p, HILO(xs), HILO(ys))
     isfinite(h) || return canonical_nonfinite(h)
     # zero_sign: a deep-underflow product can come back ±0 from the kernel with
     # an IEEE-incorrect sign; xs.hi * ys.hi underflows to the correctly signed
@@ -514,7 +514,7 @@ after it, `exponent(x.hi) >= SCALE_FLOOR`, and `exponent(y.hi) >= -149`, so
         return div_exceptional(x, y)
     kx = max(0, SCALE_FLOOR - raw_exponent(x.hi))
     xs = scale2(x, kx)                     # exact: scaling up never underflows
-    h, l = div_kernel(p, words(xs), words(y))
+    h, l = div_kernel(p, HILO(xs), HILO(y))
     isfinite(h) || return div_guarded(p, x, y)
     iszero(kx) && return raw(h, l)         # the common case pays nothing
     return ldexp(raw(h, l), -kx)           # guarded: may underflow
@@ -554,7 +554,7 @@ path existed the hot kernel turned that band into **NaN**, not merely `Inf` —
 """
 @noinline function div_guarded(p::ArithmeticPolicy, x::Double32, y::Double32)
     xs = ldexp(x, -RESCUE_SHIFT)
-    h, l = div_kernel(p, words(xs), words(y))
+    h, l = div_kernel(p, HILO(xs), HILO(y))
     # Still overflowing after the 2^-64 shift means the true quotient exceeds
     # 2^211: saturate with the IEEE sign. Not `canonical_nonfinite(h)` — the
     # overflowed q0 poisons the kernel with Inf - Inf, so h is NaN here, not a
@@ -580,7 +580,7 @@ High-accuracy compensated `x*y + z`. See [`fma_dd_`](@ref): no single-rounding
 or correct-rounding claim is made.
 """
 @inline function compensated_fma(p::ArithmeticPolicy, x::Double32, y::Double32, z::Double32)
-    h, l = fma_dd_(words(x), words(y), words(z))
+    h, l = fma_dd_(HILO(x), HILO(y), HILO(z))
     isfinite(h) || return fma_nonfinite(p, x, y, z)
     return raw(zero_sign(h, fma(x.hi, y.hi, z.hi)), l)
 end
@@ -694,7 +694,7 @@ julia> significand(Double32(12.0f0))
 1.5
 
 julia> significand(zero(Double32)), significand(Double32(Inf32))
-(Double32(0.0f0, 0.0f0), Double32(Inf32, 0.0f0))
+(0.0, Inf)
 ```
 """
 function Base.significand(x::Double32)

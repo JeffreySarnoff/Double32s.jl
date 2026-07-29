@@ -6,7 +6,7 @@
         @test fieldnames(Double32) == (:hi, :lo)
         @test @inferred(Double32(1.0f0)) isa Double32
         @test @inferred(canonicalize(1.0f0, 2.0f0^-30)) isa Double32
-        @test words(Double32(1.0f0, 2.0f0^-30)) isa Tuple{Float32,Float32}
+        @test HILO(Double32(1.0f0, 2.0f0^-30)) isa Tuple{Float32,Float32}
     end
 
     @testset "Float32 constructor is exact and sign-preserving" begin

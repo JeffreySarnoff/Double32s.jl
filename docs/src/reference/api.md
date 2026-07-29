@@ -4,9 +4,36 @@
 CurrentModule = Double32s
 ```
 
-One exported name; everything else is `public` and reached as
-`Double32s.name`. Nothing outside this page (and Base methods on `Double32`)
-is supported API.
+`using Double32s` brings in the scalar type, the word accessors, and the named
+operations that have no `Base` generic to extend:
+
+```julia
+Double32
+HI, LO, HILO, canonicalize, isnormal
+add, sub, mul, divide, reciprocal, rsqrt
+compensated_dot, compensated_mapreduce, compensated_sum, compensated_norm2
+norm2, matmul, matmul!
+```
+
+Everything else on this page is `public` rather than exported, and is reached
+as `Double32s.name`. Nothing outside this page (and `Base` methods on
+`Double32`) is supported API.
+
+!!! warning "Two exported names collide with other packages"
+    `canonicalize` is also exported by the `Dates` stdlib, and `HI`, `LO`,
+    `HILO` are also exported by `DoubleFloats.jl`. Julia resolves neither
+    automatically: with both packages loaded, the unqualified name is an
+    error until it is disambiguated. Import the one you want explicitly, in
+    its own statement:
+
+    ```julia
+    using Dates
+    using Double32s: canonicalize      # or Dates.canonicalize, qualified
+    ```
+
+    The accessors are capitalized deliberately, to match `DoubleFloats.jl`
+    rather than to avoid it — the two packages name the same operation the
+    same way.
 
 ## The module
 
@@ -23,9 +50,9 @@ Double32
 ## Accessors and normalization
 
 ```@docs
-hi
-lo
-words
+HI
+LO
+HILO
 canonicalize
 ```
 
@@ -135,10 +162,12 @@ wavefront_size
 
 ## Display and parsing
 
-The two-argument `show` prints the pair form; the three-argument
-`show(io, MIME"text/plain"(), x)` prints the shortest decimal that parses back
-to the same value, verified per value before printing. Parsing runs through a
-384-bit `BigFloat` and is host-only.
+`show` prints the shortest decimal that reconstructs the value under `parse`,
+verified per value before printing. It is the only rendering the type defines,
+so the REPL, arrays, tuples, `Dict` values, `string`, and interpolation all
+agree. Reconstruction is through `parse`, not `eval` — a bare decimal is
+`Float64` literal syntax, as it is for `BigFloat`. Use [`HILO`](@ref) for the
+representation. Parsing runs through a 384-bit `BigFloat` and is host-only.
 
 ```@docs
 decimal

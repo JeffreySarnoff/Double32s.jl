@@ -3,9 +3,13 @@
 
 A GPU-oriented double-word float built from two `Float32` words.
 
-The package exports exactly one name, the scalar type [`Double32`](@ref).
-Everything else that is supported API is marked `public` and reached as
-`Double32s.name`, following the export-hygiene rules of design section 1.3.
+The package exports the scalar type [`Double32`](@ref), the word accessors
+[`HI`](@ref), [`LO`](@ref), and [`HILO`](@ref), [`canonicalize`](@ref),
+[`isnormal`](@ref), the named arithmetic entry points `add`, `sub`, `mul`,
+`divide`, `reciprocal`, and [`rsqrt`](@ref), the compensated reductions, and
+`norm2`, `matmul`, `matmul!`. The rest of the supported API is marked `public`
+and reached as `Double32s.name`; design section 1.3 records which names carry
+collision risk and why.
 
 The module is named `Double32s` and the type `Double32` because a Julia module
 cannot also bind its own name to a type: inside `module Double32`, the binding
@@ -23,10 +27,13 @@ using AcceleratedKernels
 const AK = AcceleratedKernels
 
 export Double32
+export HI, LO, HILO, canonicalize, isnormal
+export add, sub, mul, divide, reciprocal, rsqrt
+export compensated_dot, compensated_mapreduce, compensated_sum, compensated_norm2
+export norm2, matmul, matmul!
 
-public hi, lo, words, canonicalize, isnormal
 public ArithmeticPolicy, StrictPolicy, NativePolicy, FastPolicy, DEFAULT_POLICY
-public add, sub, mul, divide, reciprocal, square_root, sqrt_or_nan, compensated_fma
+public square_root, sqrt_or_nan, compensated_fma
 public nominal_eps, unit_roundoff, float64_reference_is_exact, lsb_exponent
 public raw_exponent, sqrt_nonneg
 public has_gradual_underflow, has_fused_multiply_add, capability_report
@@ -36,11 +43,9 @@ public allocate_split
 public POS_ZERO, NEG_ZERO, POS_INF, NEG_INF, D32_NAN
 public SplitDouble32Array, split, unsplit, split!, unsplit!, allocate_split_host
 public PolicyOp, DEFAULT_GROUPSIZE
-public norm2
 public launch_config, kernel_report, wavefront_size
-public matmul!, matmul, MATMUL_TILE, MATMUL_BLOCK
-public compensated_dot, compensated_mapreduce, compensated_sum, compensated_norm2
-public rsqrt, log_or_nan, TRIG_ARG_LIMIT
+public MATMUL_TILE, MATMUL_BLOCK
+public log_or_nan, TRIG_ARG_LIMIT
 public decimal
 public LN2, INV_LN2, LN10, LOG10_E, LN2_C2, PI_D32, PIO2_D32, PIO4_D32
 public LOG2_10, LOG10_2, LOG10_2_C2, LOG1P_COEFFS

@@ -1508,7 +1508,7 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
   `AB'` 1696 → 58.0; `A*x` 18.4 → 0.89; `dot` 10⁵ 712 → 141 µs. Error
   ≤ 2.1e-14 normwise, flat in n. n=32 ratios vs `Float64` BLAS:
   `A*x` 6.0×, `A'B` 8.2×, `AB'` 8.5×, `A*B` 11.0×, `dot(10⁴)` 20.7×
-- suite: **2,662,749 assertions**, ~52 s; docs build exit 0, doctests green
+- suite: **2,662,791 assertions**, ~54 s; docs build exit 0, doctests green
 
 ### Regeneration commands
 
@@ -1534,16 +1534,12 @@ All six roadmap phases (design §24) are **complete**, plus work beyond them:
 - device throughput of the rebuilt elementary functions unmeasured: the
   exp/log tables are dynamically indexed tuples, which compile on GPU but may
   spill to local memory (§20.6 records the trade)
-- **display is context-dependent and no decision has been made about it.**
-  Array display renders elements through the three-argument `show` and prints
-  decimals; tuples, `Dict` values, `string`, and `$` interpolation take the
-  two-argument form and print pairs. This is Base's own split, not a defect,
-  but `"$x"` yielding `Double32(0.33333334f0, -9.934108f-9)` inside a sentence
-  reads badly. `Base.print(io, ::Double32)` emitting the decimal would fix
-  interpolation while leaving `repr` and the §11.5 round-trip contract intact
-  — the same separation Base uses for `Char`. Left to the author; the
-  getting-started guide documents the behavior as it stands.
 - CI builds the documentation twice per push (see Git state below)
+- two exported names require disambiguation when another common package is
+  loaded — `canonicalize` against `Dates`, and `HI`/`LO`/`HILO` against
+  `DoubleFloats` — as does `Double32` itself against `DoubleFloats.Double32`.
+  All three are accepted deliberately and documented; recorded here because
+  they are a standing cost to users, not a closed question
 
 Closed 2026-07-29 (entry below; details in `UseFableHere.md` Tier 4): the
 JMP/Muller–Rideau page references, both foreign-type extensions, and the
@@ -1943,3 +1939,101 @@ page's activation table. `decimal` is now `public`.
 - Committed `c47060c` (16 files, +273/−174). `bf8d011` and earlier are pushed.
 - Snapshot updated in place: open items gained the display-context question and
   the duplicated docs build; Git state now records the remote.
+
+---
+
+## Display reversed to one rendering; API widened — 2026-07-29
+
+Three changes at the author's direction, in the order they were made.
+
+### 1. `show` reversed: one decimal rendering, everywhere
+
+The Tier 4 arrangement — pair form on two-argument `show`, decimal on a
+three-argument method — shipped and was reversed the same day. It was not
+wrong so much as **container-dependent**, which no amount of documenting
+fixes:
+
+| expression | printed, before | why |
+|---|---|---|
+| `x` | `2.23606797749979` | REPL calls the three-argument method |
+| `[x]` | `2.23606797749979` | array printing tries three-argument first, falling back only on a newline |
+| `(x,)` | `Double32(2.236068f0, -3.283041f-8)` | `Tuple` has no three-argument method; the generic fallback discards the MIME |
+| `string(x)`, `"$x"`, `Dict` values | the pair | all two-argument paths |
+
+Read from `arrayshow.jl` and confirmed with `methods`, not inferred. It also
+broke numeric alignment: `Base.alignment(::IO, ::Real)` measures
+`sprint(show, x)` and splits at the first `.`, which under the pair form
+landed inside `Double32(2.236068f0…` and described text never printed, so
+`Vector{Double32}` lost the decimal-point alignment `Vector{Float64}` has.
+
+Now `Base.show(io, x::Double32) = print(io, decimal(x))` is the only method.
+Every path agrees and alignment matches `Float64` exactly (asserted:
+`Base.alignment(stdout, x) == Base.alignment(stdout, 0.333333333333333)`).
+
+**The contract that changes: reconstruction is `parse`, not `eval`.**
+`eval(Meta.parse(repr(x)))` yields a `Float64`, because a bare decimal is
+`Float64` literal syntax — unavoidable for any type. This is `BigFloat`'s
+arrangement, verified rather than assumed: `eval(Meta.parse(repr(big"0.1")))`
+is a `Float64` unequal to the original, while `parse(BigFloat, repr(b)) == b`.
+Design §11.5 rewritten, with the superseded rule quoted in place so the
+reversal is legible.
+
+The signed-zero property survives unchanged, because `decimal` is computed
+from the value: the invariants regression still asserts `repr(a) == repr(b)`
+for all 36 `isequal` pairs of the signed-zero surface, now against `"-0.0"`
+rather than `"Double32(-0.0f0, 0.0f0)"`.
+
+`test/core/interface.jl`'s "show round-trips" testset changed premise from
+`eval` to `parse` over the same pool. `test/core/decimal.jl` gained a testset
+asserting every display path agrees, including
+`which(show, Tuple{IO, MIME"text/plain", Double32}).module === Base.Multimedia`
+— so reintroducing a three-argument method fails the suite.
+
+### 2. `words` renamed `HILO`; `hi`/`lo` renamed `HI`/`LO`
+
+Matching `DoubleFloats.jl`, which names the same three accessors the same way.
+The lowercase spellings are now undefined, asserted by
+`@test !isdefined(Double32s, n)` for `:hi`, `:lo`, `:hilo`, `:words`.
+
+Rename hazard worth recording: a blind `s/hilo/HILO/` would corrupt
+`two_hilo_sum_`, `two_hilo_sum`, and `two_hilo_sum_checked` in the EFT layer.
+The pass used `\bhilo(` and checked the three EFT files afterward. Two call
+sites were missed by the first pattern and caught only by running the suite —
+`hi.(A)` and `lo.(A)`, broadcast accessor uses in `split`.
+
+### 3. Export list widened from one name to nineteen
+
+Exported: `Double32`, `HI`, `LO`, `HILO`, `canonicalize`, `isnormal`, `add`,
+`sub`, `mul`, `divide`, `reciprocal`, `rsqrt`, the four `compensated_*`,
+`norm2`, `matmul`, `matmul!`. Everything else stays `public`.
+
+**Two exports collide, both knowingly, and both were checked before the
+change rather than discovered after:**
+
+| name | collides with | consequence |
+|---|---|---|
+| `canonicalize` | `Dates.canonicalize` (stdlib, widely loaded) | bare name is an error under `using Dates, Double32s` |
+| `HI`, `LO`, `HILO` | `DoubleFloats.jl` exports all three | same — and this package ships an extension *for* DoubleFloats, so both loaded is a supported configuration |
+
+Resolution in both cases is an explicit import on its own line
+(`using Double32s: canonicalize`), which outranks the ambiguity. Documented in
+`reference/api.md`, the README, and design §1.3, which now records the
+relaxation of its own one-export rule alongside the two accepted collisions.
+
+This is the third instance today of one shape of problem — the package's
+`Double32` against `DoubleFloats.Double32` was the first, and it is why the
+collisions here were checked with `Base.ispublic` over `Base`, `Core`,
+`Dates`, `LinearAlgebra`, `Random`, and `Printf` before the export list was
+edited rather than afterward.
+
+The export list is now **pinned** in `test/core/interface.jl` — an exact
+`==` against the sorted expected list, not a containment check. Adding an
+export injects a name into every user's namespace, so it must be a deliberate
+edit to that test.
+
+### State
+
+- `Pkg.test()` green: **2,662,791 assertions**, 53.7 s.
+- Docs build exit 0, doctests regenerated for the new rendering and API.
+- Open item retired: the context-dependent display question recorded in the
+  previous entry is resolved by change 1.

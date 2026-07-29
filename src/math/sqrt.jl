@@ -43,7 +43,7 @@ function sqrt_or_nan(x::Double32)
     k  = raw_exponent(x.hi)
     k -= k & 1                               # even, so k >> 1 is exact
     xs = scale2(x, -k)                       # high word into [1, 4)
-    h, l = sqrt_dd_(words(xs))
+    h, l = sqrt_dd_(HILO(xs))
     isfinite(h) || return canonical_nonfinite(h)
     return ldexp(raw(h, l), k >> 1)
 end

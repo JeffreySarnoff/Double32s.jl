@@ -98,7 +98,7 @@ julia> Float64(exp(Double32(1.0f0)))
 2.718281828459041
 
 julia> exp(Double32(-1000.0f0)), exp(Double32(1000.0f0))
-(Double32(0.0f0, 0.0f0), Double32(Inf32, 0.0f0))
+(0.0, Inf)
 ```
 """
 function Base.exp(x::Double32)

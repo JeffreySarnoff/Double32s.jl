@@ -179,7 +179,7 @@ const KA = KernelAbstractions
         A = Float32[1 2; 3 4]
         B = Float32[5 6; 7 8]
         @test Float64.(Double32s.matmul(A, B)) == Float64.(A) * Float64.(B)
-        @test all(iszero, Double32s.lo.(Double32s.matmul(A, B)))
+        @test all(iszero, Double32s.LO.(Double32s.matmul(A, B)))
 
         # In-place form, and the tile size is a free parameter.
         C = Matrix{Double32}(undef, 2, 2)
@@ -416,7 +416,7 @@ end
     # Exact case: small integers, every product and sum exact.
     A = Double32.(Float32[1 2; 3 4]); B = Double32.(Float32[5 6; 7 8])
     @test Float64.(A * B) == [19.0 22.0; 43.0 50.0]
-    @test all(iszero, Double32s.lo.(A * B))
+    @test all(iszero, Double32s.LO.(A * B))
 
     # Non-finite operands must not be laundered into finite numbers by the
     # split channels: the low channel is Inf - Inf = NaN there and is gated out.

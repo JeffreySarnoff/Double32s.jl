@@ -21,8 +21,9 @@ julia> Float64(1.0f0 / 3.0f0)   # Float32 alone: ~7
 0.3333333432674408
 ```
 
-The value displays as a decimal; `repr` shows the two words behind it, the high
-word being the nearest `Float32` and the low word carrying the remainder.
+The value displays as a decimal; `Double32s.HILO` shows the two words behind
+it, the high word being the nearest `Float32` and the low word carrying the
+remainder.
 
 ```jldoctest basic
 julia> Float64(sqrt(Double32(2.0f0)))
@@ -124,5 +125,5 @@ julia> Double32(1.0f0) + 0.5f0          # Float32 promotes to Double32
 
 ```jldoctest basic
 julia> exp(Double32(1000.0f0)), exp(Double32(-1000.0f0))
-(Double32(Inf32, 0.0f0), Double32(0.0f0, 0.0f0))
+(Inf, 0.0)
 ```

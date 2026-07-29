@@ -8,7 +8,7 @@
 # sampling, so `rand(Double32)` alone is not an operand source.
 
 using Double32s
-using Double32s: raw, words, canonicalize, iscanonical, reference,
+using Double32s: raw, HILO, canonicalize, iscanonical, reference,
                  float64_reference_is_exact, lsb_exponent, is_power_of_two,
                  sqrt_or_nan, compensated_dot, compensated_sum,
                  compensated_mapreduce, norm2, compensated_norm2, split, unsplit,
@@ -48,11 +48,11 @@ inrelrange(e::BigFloat) = isfinite(e) && !iszero(e) &&
     zero_surface() -> Vector{Double32}
 
 Every pair with a zero high word, plus both low-word zero signs under a
-representative set of nonzero high words.
+representative set of nonzero high HILO.
 
 This is design section 23.12 enumerated *by construction*. An earlier draft
 listed five expressions and called them the whole failure surface; they collapse
-to three distinct pairs, and the surface is not confined to zero high words at
+to three distinct pairs, and the surface is not confined to zero high HILO at
 all, because `-` flips the low word's sign bit whatever the high word is.
 """
 function zero_surface()
@@ -70,8 +70,8 @@ end
 """
     wide_gap_pairs() -> Vector{Double32}
 
-Design section 23.11, both subclasses: subnormal low words under a not-tiny
-high word, and *normal* low words far below their permitted bound. A generator
+Design section 23.11, both subclasses: subnormal low HILO under a not-tiny
+high word, and *normal* low HILO far below their permitted bound. A generator
 that produces only the first reproduces the mistake the design's first
 correction made.
 """
@@ -80,11 +80,11 @@ function wide_gap_pairs()
                   floatmin(Float32), floatmax(Float32)]
     v = Double32[]
     for h in his, s in (1.0f0, -1.0f0)
-        # subclass 1: subnormal low words
+        # subclass 1: subnormal low HILO
         for l in (LOMIN, 3LOMIN, prevfloat(floatmin(Float32)))
             push!(v, canonicalize(h, s * l))
         end
-        # subclass 2: normal low words at every gap width the invariant allows
+        # subclass 2: normal low HILO at every gap width the invariant allows
         for k in 0:8:120
             l = ldexp(1.0f0, exponent(h) - 24 - k)
             (isfinite(l) && !iszero(l)) && push!(v, canonicalize(h, s * l))
@@ -97,7 +97,7 @@ end
     structured_pool() -> Vector{Double32}
 
 Broad structured operands: powers of two and their neighbours, the range
-extremes, and low words at every interesting distance below the half-ulp bound.
+extremes, and low HILO at every interesting distance below the half-ulp bound.
 """
 function structured_pool()
     v = Double32[]

@@ -23,9 +23,11 @@ julia> Float64(x)
 0.33333333333333304
 ```
 
-The package exports exactly one name, `Double32`. Everything else that is
-supported API is `public` and reached as `Double32s.name` — see
-[Public API](@ref api-surface).
+`using Double32s` brings in the type, the word accessors `HI`, `LO`, `HILO`,
+and the named operations that have no `Base` generic to extend. Everything
+else that is supported API is `public` and reached as `Double32s.name` — see
+[Public API](@ref api-surface), which also lists the two exported names that
+collide with other packages.
 
 !!! note "Module `Double32s`, type `Double32`"
     A Julia module cannot bind its own name to a type: inside

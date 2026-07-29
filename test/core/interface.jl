@@ -92,21 +92,23 @@
     end
 
     @testset "show round-trips" begin
+        # The reconstruction route is `parse`, not `eval`: `show` prints a bare
+        # decimal, which is `Float64` literal syntax. This is `BigFloat`'s
+        # arrangement — `eval(Meta.parse(repr(big"0.1")))` is a `Float64` too.
         for x in vcat(structured_pool(), wide_gap_pairs(), zero_surface(), NONFINITE)
             s = repr(x)
-            isnan(x.hi) && continue                  # NaN payload is canonicalized
-            y = eval(Meta.parse(s))
-            # Base's contract is that the output parses back to the same
-            # *value*; the sign of a zero low word is not a value (invariant 8).
+            y = parse(Double32, s)
+            # Base's contract is that the output reconstructs the same *value*;
+            # the sign of a zero low word is not a value (invariant 8).
             @test isequal(y, x)
             # Everything with a nonzero low word is bit-exact; a zero low word's
             # sign is not information and `canonicalize` may normalize it.
             iszero(x.lo) || @test y === x
         end
-        @test repr(Double32(1.0f0) / 3) == "Double32(0.33333334f0, -9.934108f-9)" ||
-              startswith(repr(Double32(1.0f0) / 3), "Double32(0.33333334f0, -9.9341")
-        @test repr(NEG_ZERO) == "Double32(-0.0f0, 0.0f0)"
-        @test sprint(show, POS_INF) == "Double32(Inf32, 0.0f0)"
+        @test repr(Double32(1.0f0) / 3) == "0.333333333333333"
+        @test repr(NEG_ZERO) == "-0.0"
+        @test sprint(show, POS_INF) == "Inf"
+        @test sprint(show, D32_NAN) == "NaN"
     end
 
     @testset "rand draws from a true 48-bit grid" begin
@@ -161,13 +163,27 @@
 
     @testset "public API surface" begin
         # `names` returns exported *and* public names on 1.11+, so exports are
-        # filtered explicitly. Exactly one name enters `using Double32s`.
-        exported = filter(n -> Base.isexported(Double32s, n), names(Double32s))
-        @test setdiff(exported, [:Double32s]) == [:Double32]
-        @test :Double32 in names(Double32s)
-        for n in (:hi, :lo, :words, :canonicalize, :nominal_eps, :unit_roundoff,
-                  :SplitDouble32Array, :StrictPolicy, :compensated_dot, :EFT,
-                  :sqrt_or_nan, :float64_reference_is_exact, :isnormal)
+        # filtered explicitly. The export list is pinned rather than bounded:
+        # every addition injects a name into every `using Double32s` namespace,
+        # so it must be a deliberate edit here, not a side effect elsewhere.
+        exported = sort(setdiff(filter(n -> Base.isexported(Double32s, n),
+                                       names(Double32s)), [:Double32s]))
+        @test exported == sort([:Double32, :HI, :LO, :HILO, :canonicalize,
+                                :isnormal, :add, :sub, :mul, :divide,
+                                :reciprocal, :rsqrt, :compensated_dot,
+                                :compensated_mapreduce, :compensated_sum,
+                                :compensated_norm2, :norm2, :matmul, :matmul!])
+
+        # The accessors are capitalized to match `DoubleFloats.jl`. The
+        # lowercase spellings must not exist at all: `hi`/`lo` as exported
+        # names would collide with ordinary local variables in user code.
+        for n in (:hi, :lo, :hilo, :words)
+            @test !isdefined(Double32s, n)
+        end
+
+        for n in (:nominal_eps, :unit_roundoff, :SplitDouble32Array,
+                  :StrictPolicy, :EFT, :sqrt_or_nan,
+                  :float64_reference_is_exact, :decimal)
             @test Base.ispublic(Double32s, n)
         end
         @test !Base.ispublic(Double32s, :raw)
