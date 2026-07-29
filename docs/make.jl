@@ -3,6 +3,16 @@ using Documenter
 
 DocMeta.setdocmeta!(Double32s, :DocTestSetup, :(using Double32s); recursive=true)
 
+# The measured reports are generated into docs/Reports by their own scripts
+# (`benchmarks.jl`, `accuracies.jl`). Copy the current versions into the doc
+# tree at build time so the site always ships the reports that match the code
+# — docs/src/reports/ is generated, not hand-edited.
+let src = joinpath(@__DIR__, "Reports"), dst = joinpath(@__DIR__, "src", "reports")
+    mkpath(dst)
+    cp(joinpath(src, "benchmark_report.md"), joinpath(dst, "benchmarks.md"); force=true)
+    cp(joinpath(src, "accuracy_report.md"), joinpath(dst, "accuracy.md"); force=true)
+end
+
 makedocs(;
     modules=[Double32s],
     authors="JeffreySarnoff <jeffrey.sarnoff@gmail.com> and contributors",
@@ -25,6 +35,14 @@ makedocs(;
             "Using Double32 on a GPU" => "guide/gpu.md",
             "Arrays, on CPU and GPU" => "guide/arrays.md",
             "Accuracy Model" => "guide/accuracy.md",
+        ],
+        "Examples" => [
+            "Basic Uses" => "examples/basic.md",
+            "Advanced Uses" => "examples/advanced.md",
+        ],
+        "Reports" => [
+            "Benchmark Report" => "reports/benchmarks.md",
+            "Accuracy Report" => "reports/accuracy.md",
         ],
         "Reference" => [
             "Public API" => "reference/api.md",
